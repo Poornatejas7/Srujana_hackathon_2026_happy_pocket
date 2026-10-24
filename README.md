@@ -173,6 +173,8 @@ python3 scripts/parse_pdf.py /path/to/statement.pdf
 ## 📚 Technical Documentation & Specs
 
 For deeper technical deep-dives, see the `docs/` folder:
+- **[Simulation, Ingestion & Multi-Account Storage Spec](docs/SIMULATION_INGESTION_AND_STORAGE_SPEC.md)**: Architecture for multi-instrument data (UPI, Cards, NetBanking, NACH), sorting, and database schema.
+- **[RBI Account Aggregator (AA) Integration Guide](docs/ACCOUNT_AGGREGATOR_IMPLEMENTATION.md)**: Open Banking sequence diagrams, Setu AA API code, and JSON schemas.
 - **[Complete Features Catalog & Specification](docs/FEATURES_CATALOG.md)**: Full inventory of all live ingestion, anti-distortion, and visibility features.
 - **[Ingestion Layer Gap Analysis & Roadmap](docs/INGESTION_LAYER_ROADMAP.md)**: Deep dive into statement parsing, password unlocking, and future AA integrations.
 - **[Security, Privacy & Compliance Guide](docs/SECURITY_AND_PRIVACY_GUIDE.md)**: Zero-knowledge parsing, DPDP Act 2023, PII masking, and data protection.

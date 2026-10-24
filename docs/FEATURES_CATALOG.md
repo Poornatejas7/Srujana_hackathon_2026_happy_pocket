@@ -10,6 +10,7 @@ This document provides a **comprehensive inventory of all existing and newly imp
 | :--- | :--- | :---: | :--- |
 | **Ingestion** | **Universal Indian PDF Parser** | ✅ **Live** | Fully functional in `scripts/parse_pdf.py` & `/api/parse-pdf` across SBI, HDFC, ICICI, etc. |
 | **Ingestion** | **Password-Protected Statement Decryption** | ✅ **Live** | In-memory modal decryption with Indian bank password hints (DOB/PAN). |
+| **Ingestion** | **RBI Account Aggregator (AA) Consent Flow** | ✅ **Live** | Interactive OTP consent simulator connecting SBI & Canara accounts via Setu AA spec. |
 | **Ingestion** | **Multi-Channel Transaction Dissector** | ✅ **Live** | Extracts UPI, RRN, Acquiring Bank, VPA handle, Payee, and CBS Terminal references. |
 | **Ingestion** | **Google Pay Takeout & Bank CSV Importer** | ⚠️ **In Progress** | File parser written; UI import button not yet hooked into the new PDF-centric screen. |
 | **Anti-Distortion** | **Self-Transfer Deduping Engine** | ✅ **Live** | Automatically detects own-account transfers (e.g. Kotresh/Canara) and sets spend to ₹0.00. |

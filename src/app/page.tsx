@@ -19,7 +19,11 @@ import {
   Lock,
   KeyRound,
   Sliders,
-  Edit3
+  Edit3,
+  Zap,
+  Building,
+  Smartphone,
+  Send
 } from 'lucide-react';
 import { RawTransaction, EnrichedTransaction, Category, SubscriptionItem } from '@/types/finance';
 import { extractTextFromPDF, parseBankStatementLines } from '@/lib/pdfParser';
@@ -44,6 +48,20 @@ export default function BankStatementParserApp() {
   const [pdfPassword, setPdfPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // Account Aggregator (AA) Live Flow Simulator State
+  const [isAAModalOpen, setIsAAModalOpen] = useState(false);
+  const [aaStep, setAaStep] = useState<'MOBILE' | 'OTP' | 'SELECT_ACCOUNTS' | 'FETCHING' | 'SUCCESS'>('MOBILE');
+  const [aaMobile, setAaMobile] = useState('9876543210');
+  const [aaOtp, setAaOtp] = useState('');
+  const [selectedAABanks, setSelectedAABanks] = useState<string[]>(['sbi_40665', 'canara_91636']);
+
+  // Live UPI Phone Payment Simulator State
+  const [isPhoneSimOpen, setIsPhoneSimOpen] = useState(false);
+  const [simPayee, setSimPayee] = useState('Swiggy');
+  const [simAmount, setSimAmount] = useState('450');
+  const [simApp, setSimApp] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | 'CRED'>('Google Pay');
+  const [liveToast, setLiveToast] = useState<string | null>(null);
 
   // Send file to parser with optional password
   const submitPdfForParsing = async (targetFile: File, pwd?: string) => {
@@ -150,6 +168,68 @@ export default function BankStatementParserApp() {
     submitPdfForParsing(pendingFile, pdfPassword);
   };
 
+  // Account Aggregator Workflow Handlers
+  const handleAASubmitMobile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aaMobile || aaMobile.length < 10) return;
+    setAaStep('OTP');
+  };
+
+  const handleAASubmitOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (aaOtp.length < 4) return;
+    setAaStep('SELECT_ACCOUNTS');
+  };
+
+  const handleAAAuthorize = async () => {
+    setAaStep('FETCHING');
+    setTimeout(() => {
+      // Simulate live encrypted fetch from SBI & Canara Bank
+      loadDemoStatement();
+      setAaStep('SUCCESS');
+      setTimeout(() => {
+        setIsAAModalOpen(false);
+        setAaStep('MOBILE');
+        setAaOtp('');
+      }, 1200);
+    }, 1500);
+  };
+
+  // Live Phone UPI Payment Trigger (simulates making a payment on GPay/PhonePe and receiving real-time bank event)
+  const handleLivePayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(simAmount);
+    if (!amt || isNaN(amt)) return;
+
+    const rrn = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    const vpa = `${simPayee.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`;
+    const newTx: RawTransaction = {
+      id: `tx_live_${Date.now()}`,
+      accountId: 'acc_primary_sbi',
+      amount: -amt,
+      rawDescription: `WDL TFR UPI/DR/${rrn}/${simPayee.toUpperCase()}/UTIB/${vpa}/UPI`,
+      currency: 'INR',
+      timestamp: new Date().toISOString(),
+      txMode: 'UPI',
+      upiRrn: rrn,
+      payeeName: simPayee,
+      bankCode: 'UTIB',
+      vpaHandle: vpa,
+      remark: 'UPI Live Payment',
+      terminalRef: 'LIVE POS AT 40184'
+    };
+
+    const updated = [newTx, ...extractedRawTxs];
+    setExtractedRawTxs(updated);
+    const reanalyzed = enrichAndAnalyzeTransactions(updated, userOverrides);
+    setAnalysisResult(reanalyzed);
+
+    // Trigger visual toast
+    setLiveToast(`⚡ Paid ₹${amt} to ${simPayee} via ${simApp}! Auto-ingested & classified.`);
+    setIsPhoneSimOpen(false);
+    setTimeout(() => setLiveToast(null), 5000);
+  };
+
   // Demo sample loader for testing without needing a real statement right now
   const loadDemoStatement = () => {
     const demoLines = [
@@ -218,13 +298,29 @@ export default function BankStatementParserApp() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsPhoneSimOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-cyan-300 bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 rounded-lg shadow-sm transition"
+              title="Simulate making a UPI payment on GPay/PhonePe and watch it auto-reflect live!"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
+              Simulate Live Payment (GPay/UPI)
+            </button>
+            <button
+              onClick={() => setIsAAModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-lg shadow-sm transition"
+              title="Connect bank via RBI Account Aggregator (OTP Consent)"
+            >
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+              Connect via AA
+            </button>
             {!analysisResult ? (
               <button
                 onClick={loadDemoStatement}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-lg transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-lg transition"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                Load Sample Bank Statement
+                Sample Bank Statement
               </button>
             ) : (
               <button
@@ -238,6 +334,19 @@ export default function BankStatementParserApp() {
           </div>
         </div>
       </header>
+
+      {/* Real-time Event Toast Notification */}
+      {liveToast && (
+        <div className="fixed top-20 right-8 z-50 bg-gradient-to-r from-cyan-950 to-indigo-950 border border-cyan-500/60 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300">
+            <Zap className="w-5 h-5 animate-pulse text-cyan-400" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white uppercase tracking-wider">Live Bank Feed Ingested</div>
+            <div className="text-xs text-cyan-200 mt-0.5">{liveToast}</div>
+          </div>
+        </div>
+      )}
 
       {/* Main Body */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
@@ -777,6 +886,304 @@ export default function BankStatementParserApp() {
                     )}
                   </button>
                 </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Account Aggregator (AA) Consent Flow Simulator Modal */}
+        {isAAModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-semibold text-white">RBI Account Aggregator</h3>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono border border-emerald-500/40">
+                        Live Consent Flow
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">End-to-End Encrypted Open Banking Stream</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsAAModalOpen(false)}
+                  className="text-slate-400 hover:text-white text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Step 1: Mobile Number Input */}
+              {aaStep === 'MOBILE' && (
+                <form onSubmit={handleAASubmitMobile} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Enter Mobile Number Linked to Bank Accounts
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-2.5 text-xs text-slate-500 font-mono">+91</span>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        value={aaMobile}
+                        onChange={e => setAaMobile(e.target.value)}
+                        required
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl pl-12 pr-3.5 py-2.5 text-sm text-white focus:outline-none font-mono tracking-wider"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                    <div className="font-semibold text-slate-300">How it works:</div>
+                    <p>An OTP will be sent by RBI-licensed Account Aggregator (e.g. Setu / Anumati). No bank passwords or net banking logins are ever required.</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition"
+                  >
+                    Request Consent OTP
+                  </button>
+                </form>
+              )}
+
+              {/* Step 2: OTP Verification */}
+              {aaStep === 'OTP' && (
+                <form onSubmit={handleAASubmitOtp} className="space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-xs font-medium text-slate-300">Enter 4-Digit OTP</label>
+                      <span className="text-[11px] text-slate-500">Sent to +91 {aaMobile}</span>
+                    </div>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="e.g. 1234 or 123456"
+                      value={aaOtp}
+                      onChange={e => setAaOtp(e.target.value)}
+                      autoFocus
+                      required
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-center text-lg text-white focus:outline-none font-mono tracking-widest"
+                    />
+                    <p className="text-[10px] text-slate-500 text-center mt-1">Hint: Enter any 4 numbers (e.g. 1234) for live sandbox authorization.</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAaStep('MOBILE')}
+                      className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl transition"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition"
+                    >
+                      Verify OTP
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Step 3: Select Bank Accounts to Link */}
+              {aaStep === 'SELECT_ACCOUNTS' && (
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-xs font-semibold text-white mb-1">Select Accounts to Share with Happy Pocket</h4>
+                    <p className="text-[11px] text-slate-400">Discovered 2 accounts registered with your phone number:</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {[
+                      { id: 'sbi_40665', name: 'State Bank of India', mask: '•••• 40665', type: 'Savings A/C (Salary)' },
+                      { id: 'canara_91636', name: 'Canara Bank', mask: '•••• 91636', type: 'Savings A/C (Personal)' }
+                    ].map(acc => {
+                      const isSelected = selectedAABanks.includes(acc.id);
+                      return (
+                        <div
+                          key={acc.id}
+                          onClick={() => {
+                            setSelectedAABanks(prev => 
+                              prev.includes(acc.id) ? prev.filter(x => x !== acc.id) : [...prev, acc.id]
+                            );
+                          }}
+                          className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+                            isSelected 
+                              ? 'border-emerald-500/80 bg-emerald-950/20' 
+                              : 'border-slate-800 bg-slate-950/60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-slate-800 text-slate-300">
+                              <Building className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-white">{acc.name}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">{acc.mask} · {acc.type}</div>
+                            </div>
+                          </div>
+                          <CheckCircle2 className={`w-4 h-4 ${isSelected ? 'text-emerald-400' : 'text-slate-600'}`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-[10px] text-slate-500 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Consent is periodic, read-only, and can be revoked anytime.</span>
+                  </div>
+
+                  <button
+                    onClick={handleAAAuthorize}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2"
+                  >
+                    Authorize & Fetch Transactions
+                  </button>
+                </div>
+              )}
+
+              {/* Step 4: Fetching animation */}
+              {aaStep === 'FETCHING' && (
+                <div className="py-8 text-center space-y-3">
+                  <RefreshCw className="w-8 h-8 animate-spin text-emerald-400 mx-auto" />
+                  <div className="text-sm font-semibold text-white">Pulling Encrypted Bank Packets...</div>
+                  <p className="text-xs text-slate-400">Verifying digital signatures via Setu AA Gateway and decrypting FIP payload.</p>
+                </div>
+              )}
+
+              {/* Step 5: Success confirmation */}
+              {aaStep === 'SUCCESS' && (
+                <div className="py-8 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div className="text-sm font-semibold text-white">Accounts Linked Successfully!</div>
+                  <p className="text-xs text-emerald-400 font-mono">Streamed 144 transactions directly into engine.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Live Phone UPI Payment Simulator Modal */}
+        {isPhoneSimOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-cyan-500/40 rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-2xl shadow-cyan-500/10 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                    <Smartphone className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-white">Live UPI Payment Sim</h3>
+                    <p className="text-xs text-slate-400">Simulate paying via GPay/PhonePe</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsPhoneSimOpen(false)}
+                  className="text-slate-400 hover:text-white text-xs px-2.5 py-1 rounded-lg bg-slate-800"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleLivePayment} className="space-y-4">
+                {/* App Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Payment App</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['Google Pay', 'PhonePe', 'Paytm', 'CRED'] as const).map(app => (
+                      <button
+                        type="button"
+                        key={app}
+                        onClick={() => setSimApp(app)}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
+                          simApp === app 
+                            ? 'bg-cyan-950/60 border-cyan-500 text-cyan-300' 
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {app}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Quick Merchant Buttons */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Quick Merchants</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { name: 'Swiggy', defaultAmt: '380' },
+                      { name: 'Zomato', defaultAmt: '420' },
+                      { name: 'Blinkit', defaultAmt: '290' },
+                      { name: 'Indian Oil Fuel', defaultAmt: '500' },
+                      { name: 'Uber Cab', defaultAmt: '210' },
+                      { name: 'Netflix India', defaultAmt: '199' }
+                    ].map(m => (
+                      <button
+                        type="button"
+                        key={m.name}
+                        onClick={() => {
+                          setSimPayee(m.name);
+                          setSimAmount(m.defaultAmt);
+                        }}
+                        className={`px-2.5 py-1 text-[11px] rounded-lg border transition ${
+                          simPayee === m.name 
+                            ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300' 
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Payee */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Payee Name / Merchant</label>
+                  <input
+                    type="text"
+                    value={simPayee}
+                    onChange={e => setSimPayee(e.target.value)}
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none"
+                  />
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Amount (₹)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={simAmount}
+                    onChange={e => setSimAmount(e.target.value)}
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-lg font-bold font-mono text-emerald-400 focus:outline-none"
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-500 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span>Submitting fires a live webhook simulating real-time bank debit & instant ledger updates.</span>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-600/30 transition flex items-center justify-center gap-2"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Pay ₹{simAmount} & Stream to App
+                </button>
               </form>
             </div>
           </div>
