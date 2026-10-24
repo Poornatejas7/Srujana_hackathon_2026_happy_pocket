@@ -118,9 +118,9 @@ export default function StatementUploadModal({
     if (!selected) return;
     if (!selected.name.toLowerCase().endsWith('.pdf')) {
       setErrorMessage('Please select a valid PDF file.');
-      return;
+    } else {
+      submitPdfFile(selected);
     }
-    submitPdfFile(selected);
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -236,7 +236,7 @@ export default function StatementUploadModal({
               <button
                 type="submit"
                 disabled={isProcessing}
-                className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
+                className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
                 {isProcessing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Unlock & Parse'}
               </button>

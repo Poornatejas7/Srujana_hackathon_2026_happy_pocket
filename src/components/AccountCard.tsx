@@ -39,10 +39,10 @@ export default function AccountCard({
           {/* Primary vibrant orange wave matching reference image */}
           <path
             d="M 85 220 C 150 190, 240 150, 400 105 L 400 220 Z"
-            fill="url(#orangeWaveGradient)"
+            fill="url(#cardWaveGradient)"
           />
           <defs>
-            <linearGradient id="orangeWaveGradient" x1="0%" y1="50%" x2="100%" y2="50%">
+            <linearGradient id="cardWaveGradient" x1="0%" y1="50%" x2="100%" y2="50%">
               <stop offset="0%" stopColor="#EA580C" />
               <stop offset="40%" stopColor="#F97316" />
               <stop offset="100%" stopColor="#FB923C" />
@@ -72,7 +72,7 @@ export default function AccountCard({
           <button
             type="button"
             onClick={() => setShowBalance(!showBalance)}
-            className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400/50"
+            className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400/50"
             aria-label={showBalance ? "Hide balance" : "Show balance"}
             title={showBalance ? "Hide balance" : "Show balance"}
           >
