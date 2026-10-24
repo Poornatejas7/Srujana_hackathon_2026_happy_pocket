@@ -1,22 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import { 
   Wifi, 
-  BatteryMedium, 
-  Sparkles, 
   Smartphone, 
   Monitor, 
-  Plus, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
   CheckCircle2, 
-  CreditCard, 
-  Landmark,
-  ShieldCheck,
-  TrendingUp,
-  Receipt
+  Receipt,
+  LogOut
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -31,6 +22,9 @@ import SendMoneyModal from '@/components/SendMoneyModal';
 import PaymentsTab from '@/components/PaymentsTab';
 import HistoryTab from '@/components/HistoryTab';
 import ProfileTab from '@/components/ProfileTab';
+import ExpenseTrackerTab from '@/components/ExpenseTrackerTab';
+import InsightsTab from '@/components/InsightsTab';
+import AuthScreen from '@/components/AuthScreen';
 import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
 
@@ -39,6 +33,7 @@ export default function HappyPocketApp() {
   const [transactions, setTransactions] = useState<DisplayTransaction[]>(DEFAULT_RECENT_TRANSACTIONS);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [desktopMode, setDesktopMode] = useState<'phone' | 'wide'>('phone');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   
   // Modals state
   const [isScanOpen, setIsScanOpen] = useState(false);
@@ -50,6 +45,17 @@ export default function HappyPocketApp() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleLoginSuccess = (accountNum?: string) => {
+    setIsLoggedIn(true);
+    showToast(`Welcome! Logged in as ${accountNum || 'Account User'}`);
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setActiveTab('home');
+    showToast('Logged out successfully');
   };
 
   // Handle successful payments
@@ -105,10 +111,10 @@ export default function HappyPocketApp() {
       )}
 
       {/* Top Desktop Helper / Mode Switcher Banner (Visible only on tablets & desktop >= 768px) */}
-      <aside aria-label="Desktop Viewport Switcher" className="hidden md:flex items-center justify-between px-8 py-3 bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40 text-xs shadow-xs">
+      <aside aria-label="Desktop Viewport Switcher" className="hidden md:flex items-center justify-between px-8 py-2.5 bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 text-xs shadow-xs">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <HappyPocketLogo size={32} />
+            <HappyPocketLogo size={28} />
             <span className="font-extrabold text-sm tracking-tight text-slate-900">
               Happy Pocket
             </span>
@@ -149,46 +155,96 @@ export default function HappyPocketApp() {
 
         {/* Right Info */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsUploadOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold transition shadow-xs cursor-pointer"
-          >
-            <Receipt className="w-3.5 h-3.5" />
-            <span>Import Statement</span>
-          </button>
+          {isLoggedIn ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsUploadOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold transition shadow-xs cursor-pointer"
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                <span>Import Statement</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-600 font-bold transition shadow-xs cursor-pointer border border-slate-200"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleLoginSuccess('Quick Demo User')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white font-bold transition shadow-xs cursor-pointer"
+            >
+              <span>Instant Enter (Demo)</span>
+            </button>
+          )}
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col items-center justify-center p-0 sm:p-4 md:p-8">
+      <main className="flex-1 flex flex-col items-center justify-center p-0 sm:p-4">
         
         {/* ======================================================== */}
-        {/* VIEW 1: PHONE MOCKUP VIEW (Pixel-perfect to reference image) */}
+        {/* AUTH STATE: WHEN NOT LOGGED IN, SHOW LOGIN & REGISTER */}
         {/* ======================================================== */}
-        {(desktopMode === 'phone' || typeof window === 'undefined') && (
-          <div className="w-full max-w-[420px] mx-auto md:my-4 transition-all duration-300">
-            {/* Phone outer bezel on desktop / clean on mobile */}
-            <div className="w-full bg-[#EEF2F6] md:bg-white md:p-3 md:rounded-[52px] md:shadow-[0_25px_70px_rgba(15,23,42,0.14)] md:border-[8px] md:border-slate-800/90 relative overflow-hidden">
+        {!isLoggedIn ? (
+          <div className="w-full flex flex-col items-center gap-8 py-4">
+            {/* Screen 1: Welcome Back (Interactive Login Screen) */}
+            <div className="w-full max-w-[380px] sm:max-w-[390px] mx-auto transition-all duration-300">
+              <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
+                <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" />
+              </div>
+            </div>
+
+            {/* Section Divider downwards */}
+            <div className="flex items-center gap-3 w-full max-w-[390px] px-2">
+              <div className="h-px bg-slate-300 flex-1" />
+              <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-white/90 px-3.5 py-1 rounded-full border border-slate-200 shadow-xs">
+                Extra Page Downwards • Create Account (Register)
+              </span>
+              <div className="h-px bg-slate-300 flex-1" />
+            </div>
+
+            {/* Screen 2: Create Account (Register Screen Preview) */}
+            <div className="w-full max-w-[380px] sm:max-w-[390px] mx-auto transition-all duration-300">
+              <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
+                <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="register" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ======================================================== */}
+            {/* VIEW 1: PHONE MOCKUP VIEW (Pixel-perfect replica of reference image) */}
+            {/* ======================================================== */}
+            {desktopMode === 'phone' && (
+              <div className="w-full max-w-[380px] sm:max-w-[390px] mx-auto md:my-2 transition-all duration-300">
+            {/* White smartphone bezel matching screenshot */}
+            <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
               
               {/* Phone Inner Screen Container */}
-              <div className="w-full bg-[#EEF2F6] min-h-[820px] rounded-[36px] sm:rounded-[44px] flex flex-col justify-between overflow-hidden relative">
+              <div className="w-full bg-[#EEF2F6] flex flex-col justify-between overflow-hidden">
                 
                 {/* 1. Mobile Status Bar (9:41, Signal, Battery) */}
-                <div className="w-full pt-3 px-7 flex items-center justify-between text-slate-800 select-none">
+                <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none">
                   <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
                   
                   {/* Status Bar Icons */}
                   <div className="flex items-center gap-1.5 text-slate-800">
                     {/* Cellular signal bars */}
-                    <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor">
-                      <rect x="0" y="8" width="3" height="4" rx="1" />
-                      <rect x="4.5" y="5" width="3" height="7" rx="1" />
-                      <rect x="9" y="2.5" width="3" height="9.5" rx="1" />
-                      <rect x="13.5" y="0" width="3" height="12" rx="1" />
+                    <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
+                      <rect x="0" y="7" width="2.8" height="4" rx="0.8" />
+                      <rect x="4.5" y="4.5" width="2.8" height="6.5" rx="0.8" />
+                      <rect x="9" y="2" width="2.8" height="9" rx="0.8" />
+                      <rect x="13.5" y="0" width="2.8" height="11" rx="0.8" />
                     </svg>
                     {/* Wi-Fi Icon */}
-                    <Wifi className="w-4 h-4 stroke-[2.4]" />
+                    <Wifi className="w-3.5 h-3.5 stroke-[2.4]" />
                     {/* Battery Icon */}
                     <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
                       <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
@@ -196,53 +252,73 @@ export default function HappyPocketApp() {
                   </div>
                 </div>
 
-                {/* 2. App Header (Mascot & User Avatar) */}
-                <div className="px-6 pt-3 pb-2 flex items-center justify-between">
+                {/* 2. App Header (Mascot, Title & User Avatar) */}
+                <div className="px-5 pt-2 pb-2 flex items-center justify-between">
                   {/* Left: Mascot Character */}
-                  <div className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform" onClick={() => setActiveTab('home')}>
-                    <HappyPocketLogo size={58} />
+                  <div 
+                    className="flex items-center cursor-pointer active:scale-95 transition-transform" 
+                    onClick={() => setActiveTab('home')}
+                  >
+                    <HappyPocketLogo size={50} />
                   </div>
+
+                  {/* Center: Title when on Expense Tracker or Insights */}
+                  {activeTab === 'expense' && (
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                      Expense Tracker
+                    </h2>
+                  )}
+                  {activeTab === 'insights' && (
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                      Smart Insights
+                    </h2>
+                  )}
 
                   {/* Right: Circular User Avatar */}
                   <div 
                     onClick={() => setActiveTab('profile')}
-                    className="relative w-11 h-11 rounded-full overflow-hidden border-2 border-white shadow-md cursor-pointer hover:ring-2 hover:ring-orange-400 transition"
+                    className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer hover:ring-2 hover:ring-orange-400 transition bg-amber-100 flex items-center justify-center shrink-0"
                   >
-                    <Image
+                    <img
                       src="/avatar.jpg"
                       alt="User Avatar"
-                      fill
-                      sizes="44px"
-                      priority
-                      className="object-cover"
+                      className="w-full h-full object-cover"
                     />
                   </div>
                 </div>
 
-                {/* 3. Screen Scrollable Body Content */}
-                <div className="px-5 py-2 flex-1 space-y-4 sm:space-y-5 overflow-y-auto max-h-[660px] pb-24">
+                {/* 3. Screen Body Content */}
+                <div className="px-4 py-1 space-y-3.5">
                   {activeTab === 'home' && (
                     <>
-                      {/* Signature Account Card */}
+                      {/* Signature Account Card with Midnight Navy & Orange Wave */}
                       <AccountCard
                         accountName="Savings Account"
                         accountNumberMask="•••• 5274"
                         balance={balance}
                       />
 
-                      {/* 3 Quick Action Buttons */}
+                      {/* 3 Quick Action Buttons: Scan & Pay, Send Money, Transactions */}
                       <ActionButtons
                         onScanPayClick={handleScanPay}
                         onSendMoneyClick={handleSendMoney}
                         onTransactionsClick={handleTransactionsClick}
                       />
 
-                      {/* Recent Transactions List */}
+                      {/* Recent Transactions List (Grocery, Fuel, Salary) */}
                       <RecentTransactions
-                        transactions={transactions.slice(0, 5)}
-                        onViewAll={() => setActiveTab('history')}
+                        transactions={transactions.slice(0, 3)}
+                        onTransactionClick={() => setActiveTab('history')}
                       />
                     </>
+                  )}
+
+                  {activeTab === 'expense' && (
+                    <ExpenseTrackerTab />
+                  )}
+
+                  {activeTab === 'insights' && (
+                    <InsightsTab />
                   )}
 
                   {activeTab === 'payments' && (
@@ -260,12 +336,15 @@ export default function HappyPocketApp() {
                   )}
 
                   {activeTab === 'profile' && (
-                    <ProfileTab onShowQR={() => setIsQrOpen(true)} />
+                    <ProfileTab 
+                      onShowQR={() => setIsQrOpen(true)} 
+                      onLogout={handleLogout}
+                    />
                   )}
                 </div>
 
                 {/* 4. Bottom Navigation Bar */}
-                <div className="absolute bottom-0 inset-x-0 z-30">
+                <div className="mt-3">
                   <BottomNav
                     activeTab={activeTab}
                     onChangeTab={(t) => setActiveTab(t)}
@@ -274,6 +353,151 @@ export default function HappyPocketApp() {
 
               </div>
             </div>
+
+            {/* ======================================================== */}
+            {/* EXTRA PAGE DOWNWARDS: EXPENSE TRACKER (Exact Reference Page) */}
+            {/* ======================================================== */}
+            <div className="mt-10 pt-4 flex flex-col items-center">
+              <div className="flex items-center gap-3 w-full px-2 mb-6">
+                <div className="h-px bg-slate-300 flex-1" />
+                <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-white/90 px-3.5 py-1 rounded-full border border-slate-200 shadow-xs">
+                  Extra Page Downwards • Expense Tracker
+                </span>
+                <div className="h-px bg-slate-300 flex-1" />
+              </div>
+
+              {/* White smartphone bezel matching screenshot */}
+              <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
+                <div className="w-full bg-[#EEF2F6] flex flex-col justify-between overflow-hidden">
+                  
+                  {/* Status Bar */}
+                  <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none">
+                    <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
+                    <div className="flex items-center gap-1.5 text-slate-800">
+                      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
+                        <rect x="0" y="7" width="2.8" height="4" rx="0.8" />
+                        <rect x="4.5" y="4.5" width="2.8" height="6.5" rx="0.8" />
+                        <rect x="9" y="2" width="2.8" height="9" rx="0.8" />
+                        <rect x="13.5" y="0" width="2.8" height="11" rx="0.8" />
+                      </svg>
+                      <Wifi className="w-3.5 h-3.5 stroke-[2.4]" />
+                      <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
+                        <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Header: Mascot, Centered Title & Avatar */}
+                  <div className="px-5 pt-2 pb-2 flex items-center justify-between">
+                    <div 
+                      className="flex items-center cursor-pointer active:scale-95 transition-transform"
+                      onClick={() => setActiveTab('home')}
+                    >
+                      <HappyPocketLogo size={50} />
+                    </div>
+
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                      Expense Tracker
+                    </h2>
+
+                    <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm bg-amber-100 flex items-center justify-center shrink-0">
+                      <img
+                        src="/avatar.jpg"
+                        alt="User Avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Screen Body Content: Expense Tracker */}
+                  <div className="px-4 py-1">
+                    <ExpenseTrackerTab />
+                  </div>
+
+                  {/* Bottom Navigation with Expense Tracker active */}
+                  <div className="mt-3">
+                    <BottomNav
+                      activeTab="expense"
+                      onChangeTab={(t) => setActiveTab(t)}
+                    />
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* ======================================================== */}
+            {/* EXTRA PAGE DOWNWARDS: SMART INSIGHTS (Our Theme) */}
+            {/* ======================================================== */}
+            <div className="mt-10 pt-4 flex flex-col items-center">
+              <div className="flex items-center gap-3 w-full px-2 mb-6">
+                <div className="h-px bg-slate-300 flex-1" />
+                <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-white/90 px-3.5 py-1 rounded-full border border-slate-200 shadow-xs">
+                  Extra Page Downwards • Smart Insights (Happy Pocket Theme)
+                </span>
+                <div className="h-px bg-slate-300 flex-1" />
+              </div>
+
+              {/* White smartphone bezel matching screenshot */}
+              <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
+                <div className="w-full bg-[#EEF2F6] flex flex-col justify-between overflow-hidden">
+                  
+                  {/* Status Bar */}
+                  <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none">
+                    <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
+                    <div className="flex items-center gap-1.5 text-slate-800">
+                      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
+                        <rect x="0" y="7" width="2.8" height="4" rx="0.8" />
+                        <rect x="4.5" y="4.5" width="2.8" height="6.5" rx="0.8" />
+                        <rect x="9" y="2" width="2.8" height="9" rx="0.8" />
+                        <rect x="13.5" y="0" width="2.8" height="11" rx="0.8" />
+                      </svg>
+                      <Wifi className="w-3.5 h-3.5 stroke-[2.4]" />
+                      <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
+                        <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Header: Mascot, Centered Title & Avatar in Happy Pocket Theme */}
+                  <div className="px-5 pt-2 pb-2 flex items-center justify-between">
+                    <div 
+                      className="flex items-center cursor-pointer active:scale-95 transition-transform"
+                      onClick={() => setActiveTab('home')}
+                    >
+                      <HappyPocketLogo size={50} />
+                    </div>
+
+                    <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                      Smart Insights
+                    </h2>
+
+                    <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm bg-amber-100 flex items-center justify-center shrink-0">
+                      <img
+                        src="/avatar.jpg"
+                        alt="User Avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Screen Body Content: Insights in Happy Pocket Theme */}
+                  <div className="px-4 py-1">
+                    <InsightsTab />
+                  </div>
+
+                  {/* Bottom Navigation with Insights active */}
+                  <div className="mt-2">
+                    <BottomNav
+                      activeTab="insights"
+                      onChangeTab={(t) => setActiveTab(t)}
+                    />
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -299,13 +523,11 @@ export default function HappyPocketApp() {
 
               {/* User Profile Mini Card */}
               <div className="flex items-center gap-3 p-2 pr-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white shadow-xs">
-                  <Image
+                <div className="w-10 h-10 rounded-full overflow-hidden border border-white shadow-xs">
+                  <img
                     src="/avatar.jpg"
                     alt="User Avatar"
-                    fill
-                    sizes="40px"
-                    className="object-cover"
+                    className="w-full h-full object-cover"
                   />
                 </div>
                 <div>
@@ -376,6 +598,8 @@ export default function HappyPocketApp() {
                 <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.03)]">
                   {[
                     { id: 'home', label: 'Overview' },
+                    { id: 'expense', label: 'Expense Tracker' },
+                    { id: 'insights', label: 'Smart Insights' },
                     { id: 'history', label: `Transactions (${transactions.length})` },
                     { id: 'payments', label: 'UPI Bill Payments' },
                     { id: 'profile', label: 'Account Profile' },
@@ -399,8 +623,20 @@ export default function HappyPocketApp() {
                 {activeTab === 'home' && (
                   <RecentTransactions
                     transactions={transactions}
-                    onViewAll={() => setActiveTab('history')}
+                    onTransactionClick={() => setActiveTab('history')}
                   />
+                )}
+
+                {activeTab === 'expense' && (
+                  <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <ExpenseTrackerTab />
+                  </div>
+                )}
+
+                {activeTab === 'insights' && (
+                  <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+                    <InsightsTab />
+                  </div>
                 )}
 
                 {activeTab === 'history' && (
@@ -418,7 +654,10 @@ export default function HappyPocketApp() {
                 )}
 
                 {activeTab === 'profile' && (
-                  <ProfileTab onShowQR={() => setIsQrOpen(true)} />
+                  <ProfileTab 
+                    onShowQR={() => setIsQrOpen(true)} 
+                    onLogout={handleLogout}
+                  />
                 )}
 
               </div>
@@ -426,7 +665,9 @@ export default function HappyPocketApp() {
           </div>
         )}
 
-      </main>
+      </>
+    )}
+  </main>
 
       {/* Interactive Modals */}
       <ScanPayModal

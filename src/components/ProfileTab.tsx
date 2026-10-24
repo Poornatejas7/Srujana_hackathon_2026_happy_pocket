@@ -2,13 +2,14 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { ShieldCheck, QrCode, Lock, Bell, ChevronRight, HelpCircle } from 'lucide-react';
+import { ShieldCheck, QrCode, Lock, Bell, ChevronRight, HelpCircle, LogOut } from 'lucide-react';
 
 interface ProfileTabProps {
   onShowQR: () => void;
+  onLogout?: () => void;
 }
 
-export default function ProfileTab({ onShowQR }: ProfileTabProps) {
+export default function ProfileTab({ onShowQR, onLogout }: ProfileTabProps) {
   return (
     <div className="space-y-4 animate-fadeIn">
       {/* Profile Card */}
@@ -67,6 +68,25 @@ export default function ProfileTab({ onShowQR }: ProfileTabProps) {
             </div>
           );
         })}
+
+        {/* Log Out Option */}
+        {onLogout && (
+          <div
+            onClick={onLogout}
+            className="flex items-center justify-between p-3 rounded-2xl hover:bg-red-50/70 transition cursor-pointer text-red-600 group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-50 group-hover:bg-red-100 flex items-center justify-center text-red-600 transition">
+                <LogOut className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-red-600">Log Out</h4>
+                <p className="text-[10px] text-red-400">Exit to login & registration screen</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-red-400 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        )}
       </div>
 
       {/* App Version Info */}
