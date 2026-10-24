@@ -19,15 +19,15 @@
      - **CBS Terminal Reference & Branch Location**
 
 2. **Anti-Distortion & Noise Elimination Engine (`src/lib/engine.ts`)**:
-   - **Self-Transfer Deduping**: Detects inter-account movements (e.g. transfers between SBI and Canara Bank) and zeros them out so living expenses are not falsely inflated.
-   - **Refund & Reversal Pairing**: Matches credits against debits (e.g., Meesho returns) to reflect true net spending.
+   - **Self-Transfer Deduping**: Detects inter-account movements (e.g. transfers between own accounts) and zeros them out so living expenses are not falsely inflated.
+   - **Refund & Reversal Pairing**: Matches credits against debits (e.g., merchant returns) to reflect true net spending.
    - **Shared Bill & Family Offsets**: Differentiates peer-to-peer transfers from retail merchant spending.
 
 3. **Recurring Commitment & Hidden Drain Discovery**:
    - Automatically tracks recurring UPI AutoPay mandates (Netflix India, Google Play, GoDaddy, Spotify).
    - Computes monthly burn rate and annual financial impact in Indian Rupees (`₹`).
 
-4. **Interactive Web Dashboard (`bank-sim`)**:
+4. **Interactive Web Dashboard**:
    - Built with **Next.js (App Router)**, **TypeScript**, and **Tailwind CSS**.
    - Clean drag & drop zone for instant PDF parsing.
    - Normalized ledger with full metadata view, category tagging, and net spend calculations.
@@ -37,33 +37,35 @@
 ## 📂 Repository Structure
 
 ```
-HackthonHaked/
-├── docs/                                   # Detailed Architecture & Technical Specs
+.
+├── .gitignore                              # Comprehensive ignore rules (Node, Next, Python, OS)
+├── README.md                               # Project documentation & quick start
+├── package.json                            # Root NPM dependencies & scripts
+├── tsconfig.json                           # TypeScript configuration
+├── next.config.ts                          # Next.js App Router configuration
+├── eslint.config.mjs                       # Linter configuration
+│
+├── docs/                                   # Detailed Technical Documentation
 │   ├── FINANCIAL_VISIBILITY_SOLUTION.md    # Complete F-05 solution architecture
 │   ├── INDIAN_TRANSACTION_DATA_SPEC.md     # In-depth guide on Indian UPI/banking data formats
 │   └── REAL_DATA_INGESTION_GUIDE.md        # Guide on Account Aggregator (AA) & GPay exports
 │
-├── bank-sim/                               # Next.js Web Application
-│   ├── scripts/
-│   │   └── parse_pdf.py                    # Universal multi-format Python PDF extractor
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── api/parse-pdf/route.ts      # Multi-part file upload API endpoint
-│   │   │   ├── globals.css                 # Global styles
-│   │   │   ├── layout.tsx                  # Root Next.js layout
-│   │   │   └── page.tsx                    # Interactive Financial Visibility Dashboard
-│   │   ├── data/
-│   │   │   └── mockData.ts                 # Sample fallback multi-account statements
-│   │   ├── lib/
-│   │   │   ├── engine.ts                   # Financial visibility & anti-distortion algorithms
-│   │   │   └── pdfParser.ts                # Client-side parser utilities
-│   │   └── types/
-│   │       └── finance.ts                  # Canonical TypeScript schemas
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── next.config.ts
+├── scripts/
+│   └── parse_pdf.py                        # Universal multi-format Python PDF extractor CLI
 │
-└── AccountStatement_24102026_185027.pdf    # Sample 13-page bank statement for testing
+└── src/
+    ├── app/
+    │   ├── api/parse-pdf/route.ts          # Multipart file upload API endpoint
+    │   ├── globals.css                     # Global design styles
+    │   ├── layout.tsx                      # Root HTML layout
+    │   └── page.tsx                        # Interactive Financial Visibility Dashboard
+    ├── data/
+    │   └── mockData.ts                     # Mock statements and preset scenarios
+    ├── lib/
+    │   ├── engine.ts                       # Financial visibility & anti-distortion algorithms
+    │   └── pdfParser.ts                    # Client-side parser utilities
+    └── types/
+        └── finance.ts                      # Canonical TypeScript schemas
 ```
 
 ---
@@ -74,22 +76,21 @@ HackthonHaked/
 - **Node.js**: v18+ (v22 recommended)
 - **Python**: 3.9+ with `pypdf` installed (`python3 -m pip install pypdf`)
 
-### 1. Run the Web Application
+### 1. Install Dependencies & Start Web App
 ```bash
-cd bank-sim
 npm install
 npm run dev
 ```
 Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-### 2. Test PDF Statement Parsing
-- Drag & drop your PDF statement (e.g. `AccountStatement_24102026_185027.pdf`) directly onto the dropzone.
+### 2. Test Statement Parsing
+- Drag & drop any bank statement PDF directly into the web UI dropzone.
 - The app will extract all records, categorize them, deduct internal noise, and generate the financial visibility breakdown in Indian Rupees (`₹`).
 
-### 3. Run Parser from Command Line (CLI)
+### 3. CLI Extraction
 You can also run the Python extractor directly on any PDF statement:
 ```bash
-python3 bank-sim/scripts/parse_pdf.py AccountStatement_24102026_185027.pdf
+python3 scripts/parse_pdf.py /path/to/statement.pdf
 ```
 
 ---
