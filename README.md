@@ -98,6 +98,7 @@ python3 scripts/parse_pdf.py /path/to/statement.pdf
 ## 📚 Technical Documentation & Specs
 
 For deeper technical deep-dives, see the `docs/` folder:
+- **[Full App Workflow & Architecture](docs/APP_WORKFLOW_ARCHITECTURE.md)**: End-to-end data pipeline, mermaid diagrams, and user journey.
 - **[F-05 Solution Architecture](docs/FINANCIAL_VISIBILITY_SOLUTION.md)**: Problem deconstruction, algorithms, and system design.
 - **[Indian Transaction Data Specification](docs/INDIAN_TRANSACTION_DATA_SPEC.md)**: Complete breakdown of NPCI UPI strings, RRNs, IFSC bank codes, and regex parsing.
 - **[Real Data Ingestion Guide](docs/REAL_DATA_INGESTION_GUIDE.md)**: Open Banking, RBI Account Aggregators (Setu/OneMoney), and GPay Takeout exports.
