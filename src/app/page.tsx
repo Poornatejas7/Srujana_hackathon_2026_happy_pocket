@@ -23,7 +23,10 @@ import {
   Lock,
   KeyRound,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Bot,
+  ReceiptIndianRupee,
+  Repeat
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -35,9 +38,10 @@ import RecentTransactions, {
 import BottomNav, { NavTab } from '@/components/BottomNav';
 import ScanPayModal from '@/components/ScanPayModal';
 import SendMoneyModal from '@/components/SendMoneyModal';
-import PaymentsTab from '@/components/PaymentsTab';
-import HistoryTab from '@/components/HistoryTab';
-import ProfileTab from '@/components/ProfileTab';
+import SubscriptionsTab from '@/components/SubscriptionsTab';
+import AIAdvisorTab from '@/components/AIAdvisorTab';
+import TaxFinderTab from '@/components/TaxFinderTab';
+import MultiBankWealthTab from '@/components/MultiBankWealthTab';
 import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
 import { RawTransaction, Category } from '@/types/finance';
@@ -53,12 +57,11 @@ export default function HappyPocketApp() {
   // Financial engine state
   const [extractedRawTxs, setExtractedRawTxs] = useState<RawTransaction[]>([]);
   const [analysisResult, setAnalysisResult] = useState<ReturnType<typeof enrichAndAnalyzeTransactions> | null>(null);
-  const [analyticsSubTab, setAnalyticsSubTab] = useState<'insights' | 'ledger' | 'subscriptions' | 'sandbox'>('insights');
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'insights' | 'ledger' | 'subscriptions' | 'tax' | 'sandbox'>('insights');
   const [selectedLedgerFilter, setSelectedLedgerFilter] = useState<string>('all');
   const [userOverrides, setUserOverrides] = useState<Record<string, { category: Category; tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income' }>>({});
 
   // What-If Sandbox Parameters
-  const [cancelZombieSub, setCancelZombieSub] = useState(false);
   const [trimDiningPercent, setTrimDiningPercent] = useState(15);
 
   // Modals state
@@ -274,7 +277,7 @@ export default function HappyPocketApp() {
   // Quick Action handlers
   const handleScanPay = () => setIsScanOpen(true);
   const handleSendMoney = () => setIsSendOpen(true);
-  const handleTransactionsClick = () => setActiveTab('history');
+  const handleTransactionsClick = () => setDesktopMode('wide');
 
   const filteredLedger = analysisResult?.enriched.filter(tx => {
     if (selectedLedgerFilter === 'recurring') return tx.isRecurring;
@@ -306,7 +309,7 @@ export default function HappyPocketApp() {
           </div>
           <span className="h-4 w-px bg-slate-200" />
           <span className="text-slate-500 font-medium">
-            Smart UPI Banking & Zero-Distortion Financial Visibility
+            Financial Visibility, Hidden Drain Discovery & Multi-Bank Wealth Platform
           </span>
         </div>
 
@@ -358,7 +361,7 @@ export default function HappyPocketApp() {
               }`}
             >
               <Smartphone className="w-3 h-3 text-orange-500" />
-              <span>Mobile</span>
+              <span>Mobile View</span>
             </button>
             <button
               type="button"
@@ -370,7 +373,7 @@ export default function HappyPocketApp() {
               }`}
             >
               <Monitor className="w-3 h-3 text-orange-500" />
-              <span>Dashboard</span>
+              <span>Full Dashboard</span>
             </button>
           </div>
         </div>
@@ -380,7 +383,7 @@ export default function HappyPocketApp() {
       <main className="flex-1 flex flex-col items-center justify-center p-0 sm:p-4 md:p-8">
         
         {/* ======================================================== */}
-        {/* VIEW 1: PHONE MOCKUP VIEW (Pixel-perfect mobile experience) */}
+        {/* VIEW 1: PHONE MOCKUP VIEW (Pixel-perfect Mobile App) */}
         {/* ======================================================== */}
         {(desktopMode === 'phone' || typeof window === 'undefined') && (
           <div className="w-full max-w-[420px] mx-auto md:my-4 transition-all duration-300">
@@ -418,7 +421,7 @@ export default function HappyPocketApp() {
 
                   {/* Right: Circular User Avatar */}
                   <div 
-                    onClick={() => setActiveTab('profile')}
+                    onClick={() => setActiveTab('advisor')}
                     className="relative w-11 h-11 rounded-full overflow-hidden border-2 border-white shadow-md cursor-pointer hover:ring-2 hover:ring-orange-400 transition"
                   >
                     <Image
@@ -451,60 +454,67 @@ export default function HappyPocketApp() {
                       />
 
                       {/* Financial Distortion Deduction Pill */}
-                      {analysisResult && (
-                        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#0A172E] text-white shadow-md space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                              Noise Filtered Spend
-                            </span>
-                            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
-                              Zero Distortion
-                            </span>
-                          </div>
-                          <div className="flex items-baseline justify-between">
-                            <div>
-                              <div className="text-lg font-bold font-mono">
-                                ₹{analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </div>
-                              <div className="text-[10px] text-slate-400">
-                                True living outflow (excl. transfers & refunds)
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setDesktopMode('wide')}
-                              className="text-[11px] text-orange-400 hover:text-orange-300 font-bold underline"
-                            >
-                              Explore Deep Analytics &rarr;
-                            </button>
-                          </div>
+                      <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#0A172E] text-white shadow-md space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            True Living Outflow
+                          </span>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
+                            Zero Distortion
+                          </span>
                         </div>
-                      )}
+                        <div className="flex items-baseline justify-between">
+                          <div>
+                            <div className="text-lg font-bold font-mono">
+                              ₹{analysisResult ? analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '31,540.00'}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Excludes self-transfers & paired refunds
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setDesktopMode('wide')}
+                            className="text-[11px] text-orange-400 hover:text-orange-300 font-bold underline cursor-pointer"
+                          >
+                            Analytics &rarr;
+                          </button>
+                        </div>
+                      </div>
 
                       {/* Recent Transactions List */}
                       <RecentTransactions
                         transactions={transactions.slice(0, 5)}
-                        onViewAll={() => setActiveTab('history')}
+                        onViewAll={() => setDesktopMode('wide')}
                       />
                     </>
                   )}
 
-                  {activeTab === 'payments' && (
-                    <PaymentsTab
-                      onScanClick={handleScanPay}
-                      onSendClick={handleSendMoney}
+                  {activeTab === 'subscriptions' && (
+                    <SubscriptionsTab
+                      subscriptions={analysisResult?.subscriptions || []}
+                      onCancelSubscription={(m) => showToast(`Eliminated AutoPay mandate for ${m}!`)}
                     />
                   )}
 
-                  {activeTab === 'history' && (
-                    <HistoryTab
-                      transactions={transactions}
-                      onOpenUpload={() => setIsUploadOpen(true)}
+                  {activeTab === 'advisor' && (
+                    <AIAdvisorTab
+                      trueLivingExpenses={analysisResult ? analysisResult.kpis.trueLivingExpenses : 31540}
+                      monthlyCommitments={analysisResult ? analysisResult.kpis.monthlyRecurringCommitments : 768}
+                      rawOutflows={analysisResult ? analysisResult.kpis.rawOutflows : 50740}
+                      noiseDeducted={analysisResult ? (analysisResult.kpis.rawOutflows - analysisResult.kpis.trueLivingExpenses) : 19200}
                     />
                   )}
 
-                  {activeTab === 'profile' && (
-                    <ProfileTab onShowQR={() => setIsQrOpen(true)} />
+                  {activeTab === 'tax' && (
+                    <TaxFinderTab />
+                  )}
+
+                  {activeTab === 'wealth' && (
+                    <MultiBankWealthTab
+                      onConnectAA={() => setIsAAModalOpen(true)}
+                      onUploadStatement={() => setIsUploadOpen(true)}
+                    />
                   )}
                 </div>
 
@@ -536,7 +546,7 @@ export default function HappyPocketApp() {
                     Happy Pocket Intelligence Center
                   </h1>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Unified UPI banking, NPCI RRN Dissection & Hidden Expense Discovery
+                    Zero-Distortion Living Expense Discovery, Subscription Killer & Multi-Bank Wealth Platform
                   </p>
                 </div>
               </div>
@@ -642,6 +652,7 @@ export default function HappyPocketApp() {
                     { id: 'insights', label: 'Financial Discovery' },
                     { id: 'ledger', label: `Normalized Ledger (${analysisResult ? analysisResult.enriched.length : transactions.length})` },
                     { id: 'subscriptions', label: `Recurring Drains (${analysisResult ? analysisResult.subscriptions.length : 2})` },
+                    { id: 'tax', label: 'Tax Deductions' },
                     { id: 'sandbox', label: 'What-If Savings Sandbox' },
                   ].map((t) => (
                     <button
@@ -849,39 +860,18 @@ export default function HappyPocketApp() {
 
                 {/* SubTab 3: Recurring Drains & Subscriptions */}
                 {analyticsSubTab === 'subscriptions' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {(analysisResult?.subscriptions && analysisResult.subscriptions.length > 0
-                      ? analysisResult.subscriptions
-                      : [
-                          { merchant: 'Netflix India', monthlyCost: 649, annualImpact: 7788, category: 'Subscriptions & Digital', status: 'ACTIVE_RECURRING' },
-                          { merchant: 'Spotify Premium', monthlyCost: 119, annualImpact: 1428, category: 'Subscriptions & Digital', status: 'ACTIVE_RECURRING' }
-                        ]
-                    ).map((sub, idx) => (
-                      <div key={idx} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col justify-between">
-                        <div>
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
-                              {sub.category}
-                            </span>
-                            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-                              AutoPay Active
-                            </span>
-                          </div>
-                          <h4 className="text-base font-bold text-slate-900">{sub.merchant}</h4>
-                          <div className="text-2xl font-bold font-mono text-slate-900 mt-2">
-                            ₹{sub.monthlyCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            <span className="text-xs font-normal text-slate-500"> /mo</span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            Annual Drain: ₹{sub.annualImpact.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <SubscriptionsTab
+                    subscriptions={analysisResult?.subscriptions || []}
+                    onCancelSubscription={(m) => showToast(`Eliminated AutoPay mandate for ${m}!`)}
+                  />
                 )}
 
-                {/* SubTab 4: What-If Savings Sandbox */}
+                {/* SubTab 4: Tax Finder */}
+                {analyticsSubTab === 'tax' && (
+                  <TaxFinderTab />
+                )}
+
+                {/* SubTab 5: What-If Savings Sandbox */}
                 {analyticsSubTab === 'sandbox' && (
                   <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-4">
                     <div>
