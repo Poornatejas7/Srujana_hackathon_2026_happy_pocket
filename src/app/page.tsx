@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { 
   Wifi, 
@@ -32,8 +32,7 @@ import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
 import ActionButtons from '@/components/ActionButtons';
 import RecentTransactions, { 
-  DisplayTransaction, 
-  DEFAULT_RECENT_TRANSACTIONS 
+  DisplayTransaction 
 } from '@/components/RecentTransactions';
 import BottomNav, { NavTab } from '@/components/BottomNav';
 import ScanPayModal from '@/components/ScanPayModal';
@@ -50,7 +49,7 @@ import { enrichAndAnalyzeTransactions } from '@/lib/engine';
 
 export default function HappyPocketApp() {
   const [balance, setBalance] = useState<number>(14524.91);
-  const [transactions, setTransactions] = useState<DisplayTransaction[]>(DEFAULT_RECENT_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<DisplayTransaction[]>([]);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [desktopMode, setDesktopMode] = useState<'phone' | 'wide'>('phone');
   
@@ -60,6 +59,7 @@ export default function HappyPocketApp() {
   const [analyticsSubTab, setAnalyticsSubTab] = useState<'insights' | 'ledger' | 'subscriptions' | 'tax' | 'sandbox'>('insights');
   const [selectedLedgerFilter, setSelectedLedgerFilter] = useState<string>('all');
   const [userOverrides, setUserOverrides] = useState<Record<string, { category: Category; tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income' }>>({});
+  const [isDbLoading, setIsDbLoading] = useState<boolean>(true);
 
   // What-If Sandbox Parameters
   const [trimDiningPercent, setTrimDiningPercent] = useState(15);
@@ -89,6 +89,46 @@ export default function HappyPocketApp() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Load real data from MongoDB Atlas on mount
+  useEffect(() => {
+    async function loadFromDb() {
+      try {
+        setIsDbLoading(true);
+        const res = await fetch('/api/transactions');
+        const data = await res.json();
+
+        if (data.success && data.transactions && data.transactions.length > 0) {
+          const rawList: RawTransaction[] = data.transactions.map((t: any) => ({
+            id: t._id || t.id,
+            accountId: t.accountId || 'acc_primary_sbi',
+            amount: t.amount,
+            rawDescription: t.rawDescription,
+            currency: t.currency || 'INR',
+            timestamp: t.timestamp,
+            txMode: t.txMode || 'UPI',
+            upiRrn: t.upiRrn,
+            payeeName: t.payeeName,
+            bankCode: t.bankCode,
+            vpaHandle: t.vpaHandle,
+            remark: t.remark
+          }));
+
+          setExtractedRawTxs(rawList);
+          syncTransactionsWithEngine(rawList);
+        } else {
+          setTransactions([]);
+        }
+      } catch (err) {
+        console.error('Failed to load transactions from MongoDB:', err);
+        setTransactions([]);
+      } finally {
+        setIsDbLoading(false);
+      }
+    }
+
+    loadFromDb();
+  }, []);
+
   // Convert raw transactions to display transactions & update state
   const syncTransactionsWithEngine = (rawTxs: RawTransaction[], overrides = userOverrides) => {
     const analysis = enrichAndAnalyzeTransactions(rawTxs, overrides);
@@ -109,8 +149,8 @@ export default function HappyPocketApp() {
     setTransactions(converted);
   };
 
-  // Human-in-the-Loop Category Override Handler
-  const handleRecategorize = (txId: string, currentCategory: Category) => {
+  // Human-in-the-Loop Category Override Handler (Persisted to MongoDB)
+  const handleRecategorize = async (txId: string, currentCategory: Category) => {
     const categories: Category[] = [
       'Housing & Utilities',
       'Groceries',
@@ -135,6 +175,50 @@ export default function HappyPocketApp() {
     if (extractedRawTxs.length > 0) {
       syncTransactionsWithEngine(extractedRawTxs, updated);
     }
+
+    // Persist category edit to MongoDB Atlas
+    try {
+      await fetch('/api/transactions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: txId, category: newCat, tier: newTier, userOverridden: true }),
+      });
+      showToast(`Category updated to "${newCat}" in Atlas Database!`);
+    } catch (e) {
+      console.warn('Failed to update category in database:', e);
+    }
+  };
+
+  // Delete / Cancel Mandate from MongoDB Atlas
+  const handleCancelMandate = async (merchant: string) => {
+    try {
+      await fetch(`/api/transactions?merchant=${encodeURIComponent(merchant)}`, {
+        method: 'DELETE',
+      });
+      // Remove from local memory
+      const filtered = extractedRawTxs.filter(t => 
+        !t.payeeName?.toLowerCase().includes(merchant.toLowerCase()) && 
+        !t.rawDescription?.toLowerCase().includes(merchant.toLowerCase())
+      );
+      setExtractedRawTxs(filtered);
+      syncTransactionsWithEngine(filtered);
+      showToast(`Deleted "${merchant}" mandate from Atlas Database!`);
+    } catch (e) {
+      console.warn('Failed to delete mandate from database:', e);
+    }
+  };
+
+  // Helper to persist transaction to MongoDB
+  const persistToDatabase = async (txs: RawTransaction | RawTransaction[]) => {
+    try {
+      await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(txs),
+      });
+    } catch (e) {
+      console.warn('Database save warning:', e);
+    }
   };
 
   // Handle successful payments
@@ -158,6 +242,7 @@ export default function HappyPocketApp() {
     const nextRaw = [newTx, ...extractedRawTxs];
     setExtractedRawTxs(nextRaw);
     syncTransactionsWithEngine(nextRaw);
+    persistToDatabase(newTx);
     showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}`);
   };
 
@@ -181,6 +266,7 @@ export default function HappyPocketApp() {
     const nextRaw = [newTx, ...extractedRawTxs];
     setExtractedRawTxs(nextRaw);
     syncTransactionsWithEngine(nextRaw);
+    persistToDatabase(newTx);
     showToast(`Sent ₹${amount.toLocaleString('en-IN')} to ${recipient}`);
   };
 
@@ -189,6 +275,7 @@ export default function HappyPocketApp() {
     if (raw && raw.length > 0) {
       setExtractedRawTxs(raw);
       syncTransactionsWithEngine(raw);
+      persistToDatabase(raw);
     } else {
       setTransactions((prev) => [...imported, ...prev]);
     }
@@ -223,6 +310,7 @@ export default function HappyPocketApp() {
     const updated = [newTx, ...extractedRawTxs];
     setExtractedRawTxs(updated);
     syncTransactionsWithEngine(updated);
+    persistToDatabase(newTx);
 
     showToast(`⚡ Paid ₹${amt} to ${simPayee} via ${simApp}! Auto-reflected in app.`);
     setIsPhoneSimOpen(false);
@@ -263,13 +351,14 @@ export default function HappyPocketApp() {
       const raw = parseBankStatementLines(demoLines);
       setExtractedRawTxs(raw);
       syncTransactionsWithEngine(raw);
+      persistToDatabase(raw);
 
       setAaStep('SUCCESS');
       setTimeout(() => {
         setIsAAModalOpen(false);
         setAaStep('MOBILE');
         setAaOtp('');
-        showToast("Connected via RBI Account Aggregator! Streamed live records.");
+        showToast("Connected via RBI Account Aggregator! Streamed live records to Atlas.");
       }, 1000);
     }, 1400);
   };
@@ -493,7 +582,7 @@ export default function HappyPocketApp() {
                   {activeTab === 'subscriptions' && (
                     <SubscriptionsTab
                       subscriptions={analysisResult?.subscriptions || []}
-                      onCancelSubscription={(m) => showToast(`Eliminated AutoPay mandate for ${m}!`)}
+                      onCancelSubscription={handleCancelMandate}
                     />
                   )}
 
@@ -862,7 +951,7 @@ export default function HappyPocketApp() {
                 {analyticsSubTab === 'subscriptions' && (
                   <SubscriptionsTab
                     subscriptions={analysisResult?.subscriptions || []}
-                    onCancelSubscription={(m) => showToast(`Eliminated AutoPay mandate for ${m}!`)}
+                    onCancelSubscription={handleCancelMandate}
                   />
                 )}
 

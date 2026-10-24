@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Repeat, 
   AlertTriangle, 
@@ -17,57 +17,15 @@ interface SubscriptionsTabProps {
   onCancelSubscription?: (merchant: string) => void;
 }
 
-const DEFAULT_SUBSCRIPTIONS: SubscriptionItem[] = [
-  {
-    merchant: 'Netflix India',
-    category: 'Subscriptions & Digital',
-    monthlyCost: 649,
-    frequency: 'monthly',
-    annualImpact: 7788,
-    status: 'Active',
-    lastCharged: '2026-10-05',
-    nextExpected: '2026-11-05',
-    confidence: 0.98,
-  },
-  {
-    merchant: 'Spotify Premium',
-    category: 'Subscriptions & Digital',
-    monthlyCost: 119,
-    frequency: 'monthly',
-    annualImpact: 1428,
-    status: 'Active',
-    lastCharged: '2026-10-08',
-    nextExpected: '2026-11-08',
-    confidence: 0.95,
-  },
-  {
-    merchant: 'Google Play AutoPay',
-    category: 'Subscriptions & Digital',
-    monthlyCost: 299,
-    frequency: 'monthly',
-    annualImpact: 3588,
-    status: 'Zombie/Unused Trial',
-    lastCharged: '2026-09-28',
-    nextExpected: '2026-10-28',
-    confidence: 0.92,
-  },
-];
-
 export default function SubscriptionsTab({
-  subscriptions = DEFAULT_SUBSCRIPTIONS,
+  subscriptions,
   onCancelSubscription,
 }: SubscriptionsTabProps) {
-  const [activeSubs, setActiveSubs] = useState<SubscriptionItem[]>(
-    subscriptions.length > 0 ? subscriptions : DEFAULT_SUBSCRIPTIONS
-  );
-  const [cancelledCount, setCancelledCount] = useState(0);
-
+  const activeSubs = subscriptions || [];
   const totalMonthlyDrain = activeSubs.reduce((acc, curr) => acc + curr.monthlyCost, 0);
   const totalAnnualDrain = totalMonthlyDrain * 12;
 
   const handleCancel = (merchant: string) => {
-    setActiveSubs(prev => prev.filter(s => s.merchant !== merchant));
-    setCancelledCount(prev => prev + 1);
     onCancelSubscription?.(merchant);
   };
 
@@ -80,7 +38,7 @@ export default function SubscriptionsTab({
             Active AutoPay Mandates
           </span>
           <span className="text-[10px] bg-rose-500/20 text-rose-300 font-mono px-2 py-0.5 rounded-full border border-rose-500/30">
-            {activeSubs.length} Subscriptions Detected
+            {activeSubs.length} Subscriptions Detected in DB
           </span>
         </div>
 
@@ -101,13 +59,6 @@ export default function SubscriptionsTab({
             <span className="text-[10px] text-rose-400">Cumulative wealth leakage</span>
           </div>
         </div>
-
-        {cancelledCount > 0 && (
-          <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>You eliminated {cancelledCount} recurring commitment(s)! Saved ₹{(cancelledCount * 350 * 12).toLocaleString('en-IN')}/yr.</span>
-          </div>
-        )}
       </div>
 
       {/* Subscription Mandate Items */}
@@ -124,7 +75,7 @@ export default function SubscriptionsTab({
         {activeSubs.length === 0 ? (
           <div className="p-8 text-center bg-white rounded-2xl border border-slate-100 text-xs text-slate-500">
             <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-            Zero active recurring drains found! All zombie subscriptions eliminated.
+            Zero active recurring drains found in database! All zombie subscriptions eliminated.
           </div>
         ) : (
           activeSubs.map((sub, idx) => {
