@@ -9,6 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
+    const password = (formData.get('password') as string) || '';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -24,9 +25,14 @@ export async function POST(req: NextRequest) {
 
     const scriptPath = path.join(process.cwd(), 'scripts', 'parse_pdf.py');
 
-    // Run Python parser
+    // Run Python parser with optional password
+    const pyArgs = [scriptPath, tempFilePath];
+    if (password) {
+      pyArgs.push(password);
+    }
+
     const resultJson = await new Promise<string>((resolve, reject) => {
-      const py = spawn('python3', [scriptPath, tempFilePath]);
+      const py = spawn('python3', pyArgs);
       let stdout = '';
       let stderr = '';
 
@@ -43,6 +49,10 @@ export async function POST(req: NextRequest) {
     });
 
     const parsed = JSON.parse(resultJson);
+    if (parsed.is_encrypted) {
+      return NextResponse.json(parsed, { status: 200 });
+    }
+
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error || 'Failed to extract transactions' }, { status: 422 });
     }

@@ -193,10 +193,26 @@ def dissect_narration(raw_text):
         'full_narration': clean
     }
 
-def parse_universal_pdf(pdf_path):
+def parse_universal_pdf(pdf_path, password=None):
     reader = PdfReader(pdf_path)
-    all_lines = []
     
+    # Check if PDF is encrypted / password-protected
+    if reader.is_encrypted:
+        if not password:
+            return {
+                "is_encrypted": True,
+                "error": "PASSWORD_REQUIRED",
+                "message": "This bank statement is password-protected. Please enter the password (e.g., DOB DDMMYYYY or PAN)."
+            }
+        decrypted = reader.decrypt(password)
+        if decrypted == 0:
+            return {
+                "is_encrypted": True,
+                "error": "INCORRECT_PASSWORD",
+                "message": "Incorrect password. Most banks use DOB (DDMMYYYY) or PAN in lowercase."
+            }
+            
+    all_lines = []
     for page in reader.pages:
         txt = page.extract_text()
         if txt:
@@ -305,13 +321,18 @@ if __name__ == '__main__':
         print(json.dumps({"error": "No file path provided"}))
         sys.exit(1)
         
+    password = sys.argv[2] if len(sys.argv) > 2 else None
     try:
-        txs = parse_universal_pdf(sys.argv[1])
+        res = parse_universal_pdf(sys.argv[1], password=password)
+        if isinstance(res, dict) and res.get('is_encrypted'):
+            print(json.dumps(res))
+            sys.exit(0)
+            
         print(json.dumps({
             "success": True, 
-            "transactions": txs, 
-            "extractedCount": len(txs),
-            "channels": list(set(t['txMode'] for t in txs))
+            "transactions": res, 
+            "extractedCount": len(res),
+            "channels": list(set(t['txMode'] for t in res))
         }))
     except Exception as e:
         print(json.dumps({"error": str(e)}))

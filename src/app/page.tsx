@@ -15,7 +15,11 @@ import {
   Filter, 
   Tag, 
   ArrowRightLeft,
-  DollarSign
+  DollarSign,
+  Lock,
+  KeyRound,
+  Sliders,
+  Edit3
 } from 'lucide-react';
 import { RawTransaction, EnrichedTransaction, Category, SubscriptionItem } from '@/types/finance';
 import { extractTextFromPDF, parseBankStatementLines } from '@/lib/pdfParser';
@@ -27,26 +31,32 @@ export default function BankStatementParserApp() {
   const [extractedRawTxs, setExtractedRawTxs] = useState<RawTransaction[]>([]);
   const [analysisResult, setAnalysisResult] = useState<ReturnType<typeof enrichAndAnalyzeTransactions> | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'insights' | 'transactions' | 'subscriptions'>('insights');
+  const [activeTab, setActiveTab] = useState<'insights' | 'transactions' | 'subscriptions' | 'sandbox'>('insights');
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [userOverrides, setUserOverrides] = useState<Record<string, { category: Category; tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income' }>>({});
 
-  // Handle PDF file selection & extraction
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+  // What-If Sandbox Parameters
+  const [cancelZombieSub, setCancelZombieSub] = useState(false);
+  const [trimDiningPercent, setTrimDiningPercent] = useState(15);
 
-    if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
-      setErrorMessage('Please upload a valid bank statement PDF file.');
-      return;
-    }
+  // Password Unlock Modal State
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [pdfPassword, setPdfPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
-    setFile(selectedFile);
-    setErrorMessage(null);
+  // Send file to parser with optional password
+  const submitPdfForParsing = async (targetFile: File, pwd?: string) => {
     setIsProcessing(true);
+    setErrorMessage(null);
+    setPasswordError(null);
 
     try {
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      formData.append('file', targetFile);
+      if (pwd) {
+        formData.append('password', pwd);
+      }
 
       const res = await fetch('/api/parse-pdf', {
         method: 'POST',
@@ -54,6 +64,17 @@ export default function BankStatementParserApp() {
       });
 
       const data = await res.json();
+
+      // Check if statement requires password
+      if (data.is_encrypted) {
+        setPendingFile(targetFile);
+        setIsPasswordModalOpen(true);
+        if (data.error === 'INCORRECT_PASSWORD') {
+          setPasswordError(data.message || 'Incorrect password.');
+        }
+        setIsProcessing(false);
+        return;
+      }
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to parse the bank statement PDF.');
@@ -63,16 +84,70 @@ export default function BankStatementParserApp() {
         throw new Error('No debit/credit transaction entries found in this PDF.');
       }
 
+      // Successful parse: close modal and set state
+      setIsPasswordModalOpen(false);
+      setPdfPassword('');
+      setPendingFile(null);
+      setFile(targetFile);
       setExtractedRawTxs(data.transactions);
 
       // Run Financial Visibility & Anti-Distortion Engine
-      const analyzed = enrichAndAnalyzeTransactions(data.transactions);
+      const analyzed = enrichAndAnalyzeTransactions(data.transactions, userOverrides);
       setAnalysisResult(analyzed);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to parse the bank statement PDF.');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Human-in-the-Loop Category Override Handler
+  const handleRecategorize = (txId: string, currentCategory: Category) => {
+    const categories: Category[] = [
+      'Housing & Utilities',
+      'Groceries',
+      'Dining & Nightlife',
+      'Subscriptions & Digital',
+      'Transport & Fuel',
+      'Healthcare',
+      'Shopping & Discretionary',
+      'Internal Transfer',
+      'Reimbursement / Split'
+    ];
+    const nextIdx = (categories.indexOf(currentCategory) + 1) % categories.length;
+    const newCat = categories[nextIdx];
+    const isEssential = ['Housing & Utilities', 'Groceries', 'Healthcare'].includes(newCat);
+    const newTier = isEssential ? 'Essential' : (newCat === 'Internal Transfer' || newCat === 'Reimbursement / Split' ? 'Transfer_or_Offset' : 'Discretionary');
+
+    const updated = {
+      ...userOverrides,
+      [txId]: { category: newCat, tier: newTier as any }
+    };
+    setUserOverrides(updated);
+    if (extractedRawTxs.length > 0) {
+      const reanalyzed = enrichAndAnalyzeTransactions(extractedRawTxs, updated);
+      setAnalysisResult(reanalyzed);
+    }
+  };
+
+  // Handle initial PDF selection
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
+      setErrorMessage('Please upload a valid bank statement PDF file.');
+      return;
+    }
+
+    await submitPdfForParsing(selectedFile);
+  };
+
+  // Handle password form submission
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingFile || !pdfPassword) return;
+    submitPdfForParsing(pendingFile, pdfPassword);
   };
 
   // Demo sample loader for testing without needing a real statement right now
@@ -244,7 +319,8 @@ export default function BankStatementParserApp() {
                 {[
                   { id: 'insights', label: 'Financial Discovery' },
                   { id: 'transactions', label: `Normalized Ledger (${analysisResult.enriched.length})` },
-                  { id: 'subscriptions', label: `Recurring Drains (${analysisResult.subscriptions.length})` }
+                  { id: 'subscriptions', label: `Recurring Drains (${analysisResult.subscriptions.length})` },
+                  { id: 'sandbox', label: 'What-If Savings Sandbox' }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -388,6 +464,7 @@ export default function BankStatementParserApp() {
                         <th className="py-3 px-4 text-right">Statement Amt</th>
                         <th className="py-3 px-4 text-right">Net Spend</th>
                         <th className="py-3 px-4 text-center">Engine Tag</th>
+                        <th className="py-3 px-4 text-center">Override</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -457,6 +534,21 @@ export default function BankStatementParserApp() {
                                   AutoPay / Recurring
                                 </span>
                               )}
+                              {tx.userOverridden && (
+                                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium ml-1">
+                                  User Adjusted
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => handleRecategorize(tx.id, tx.category)}
+                                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-indigo-400 transition"
+                                title="Click to cycle category"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                Override
+                              </button>
                             </td>
                           </tr>
                         );
@@ -489,6 +581,204 @@ export default function BankStatementParserApp() {
                 ))}
               </div>
             )}
+
+            {/* VIEW 4: WHAT-IF SAVINGS SANDBOX */}
+            {activeTab === 'sandbox' && (
+              <div className="space-y-6">
+                <div className="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
+                  <h3 className="text-base font-semibold text-white mb-1">Financial Adjustment & What-If Scenario Sandbox</h3>
+                  <p className="text-xs text-slate-400">
+                    Explore actionable adjustments: calculate how cutting unnecessary commitments or dialing back discretionary categories changes your wealth growth.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Controls */}
+                  <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-6">
+                    <h4 className="text-sm font-semibold text-white uppercase tracking-wider">Adjustment Levers</h4>
+
+                    {/* Lever 1: Discretionary Spend Slider */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Trim Discretionary (Shopping & Dining)</span>
+                        <span className="font-mono text-indigo-400">{trimDiningPercent}% reduction</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        step="5"
+                        value={trimDiningPercent}
+                        onChange={e => setTrimDiningPercent(parseInt(e.target.value))}
+                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-500">
+                        <span>0% (As-is)</span>
+                        <span>25% (Moderate)</span>
+                        <span>50% (High discipline)</span>
+                      </div>
+                    </div>
+
+                    {/* Lever 2: Subscriptions Toggle */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Cancel Forgotten Digital Subscriptions</span>
+                        <span className="font-mono text-emerald-400">
+                          +₹{(analysisResult.subscriptions.length > 0 ? analysisResult.subscriptions[0].monthlyCost : 0).toLocaleString('en-IN')}/mo
+                        </span>
+                      </div>
+                      <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={cancelZombieSub}
+                          onChange={e => setCancelZombieSub(e.target.checked)}
+                          className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 w-4 h-4"
+                        />
+                        <div className="text-xs">
+                          <div className="text-white font-medium">Terminate inactive recurring subscriptions</div>
+                          <div className="text-slate-500">Eliminates unused recurring drain with 0 lifestyle disruption.</div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Projected Savings Card */}
+                  {(() => {
+                    const discretionarySpend = analysisResult.enriched
+                      .filter(t => t.tier === 'Discretionary' && t.amount < 0)
+                      .reduce((s, t) => s + t.netOutflowAmount, 0);
+                    const subTrim = cancelZombieSub && analysisResult.subscriptions.length > 0 ? analysisResult.subscriptions[0].monthlyCost : 0;
+                    const monthlySavings = (discretionarySpend * (trimDiningPercent / 100)) + subTrim;
+
+                    return (
+                      <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-indigo-500/30 flex flex-col justify-between">
+                        <div>
+                          <span className="text-xs uppercase font-semibold tracking-wider text-indigo-300">Projected Compounding Value</span>
+                          <div className="text-4xl font-extrabold font-mono text-white mt-2">
+                            +₹{monthlySavings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <span className="text-sm font-normal text-slate-400"> / month</span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-2">
+                            Free cash flow unlocked without altering essential needs (Rent, Electricity, Groceries).
+                          </p>
+
+                          <div className="mt-8 space-y-3">
+                            <div className="flex justify-between items-center p-3 rounded-lg bg-slate-950/60 border border-slate-800">
+                              <span className="text-xs text-slate-400">1-Year Direct Cash Boost:</span>
+                              <span className="text-sm font-mono font-bold text-emerald-400">
+                                +₹{(monthlySavings * 12).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 rounded-lg bg-slate-950/60 border border-slate-800">
+                              <span className="text-xs text-slate-400">5-Year Growth (at 7% return):</span>
+                              <span className="text-sm font-mono font-bold text-cyan-400">
+                                +₹{(monthlySavings * 12 * 5 * 1.15).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-slate-800 text-[11px] text-slate-500">
+                          Maintains your historical emergency liquidity and high-yield savings interest.
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Password Unlock Modal */}
+        {isPasswordModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-white">Statement is Encrypted</h3>
+                    <p className="text-xs text-slate-400">{pendingFile?.name || 'Bank_Statement.pdf'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsPasswordModalOpen(false);
+                    setPendingFile(null);
+                    setPdfPassword('');
+                  }}
+                  className="text-slate-400 hover:text-white text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                    Enter PDF Password
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="e.g. DDMMYYYY or PAN in lowercase"
+                    value={pdfPassword}
+                    onChange={e => setPdfPassword(e.target.value)}
+                    autoFocus
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none transition font-mono tracking-wider"
+                  />
+                </div>
+
+                {passwordError && (
+                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{passwordError}</span>
+                  </div>
+                )}
+
+                {/* Helpful Hints for Indian Banks */}
+                <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+                  <div className="font-semibold text-slate-300">Common Bank Password Formats:</div>
+                  <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                    <li><strong className="text-slate-300">SBI:</strong> 11-digit Account No. or DOB (DDMMYYYY) + last 5 digits of mobile.</li>
+                    <li><strong className="text-slate-300">HDFC:</strong> NetBanking Customer ID or DOB (DDMMYYYY).</li>
+                    <li><strong className="text-slate-300">ICICI / Axis:</strong> DOB (DDMMYYYY) or PAN in lowercase.</li>
+                  </ul>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPasswordModalOpen(false);
+                      setPendingFile(null);
+                      setPdfPassword('');
+                    }}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isProcessing || !pdfPassword}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Decrypting...
+                      </>
+                    ) : (
+                      'Unlock & Parse Statement'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </main>
