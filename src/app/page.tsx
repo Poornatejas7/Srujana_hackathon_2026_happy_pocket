@@ -1,53 +1,72 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { 
-  FileText, 
-  UploadCloud, 
+  Wifi, 
+  Smartphone, 
+  Monitor, 
   CheckCircle2, 
-  AlertCircle, 
-  Sparkles, 
-  ArrowRight, 
-  Layers, 
-  ShieldCheck, 
-  TrendingDown, 
-  RefreshCw, 
-  Filter, 
-  Tag, 
-  ArrowRightLeft,
+  Receipt,
+  Zap,
+  TrendingDown,
+  Layers,
+  ArrowRight,
+  ShieldCheck,
+  Building,
+  Sliders,
   DollarSign,
+  Send,
+  Edit3,
+  Filter,
+  Sparkles,
   Lock,
   KeyRound,
-  Sliders,
-  Edit3,
-  Zap,
-  Building,
-  Smartphone,
-  Send
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
-import { RawTransaction, EnrichedTransaction, Category, SubscriptionItem } from '@/types/finance';
-import { extractTextFromPDF, parseBankStatementLines } from '@/lib/pdfParser';
+import HappyPocketLogo from '@/components/HappyPocketLogo';
+import AccountCard from '@/components/AccountCard';
+import ActionButtons from '@/components/ActionButtons';
+import RecentTransactions, { 
+  DisplayTransaction, 
+  DEFAULT_RECENT_TRANSACTIONS 
+} from '@/components/RecentTransactions';
+import BottomNav, { NavTab } from '@/components/BottomNav';
+import ScanPayModal from '@/components/ScanPayModal';
+import SendMoneyModal from '@/components/SendMoneyModal';
+import PaymentsTab from '@/components/PaymentsTab';
+import HistoryTab from '@/components/HistoryTab';
+import ProfileTab from '@/components/ProfileTab';
+import StatementUploadModal from '@/components/StatementUploadModal';
+import MyQrModal from '@/components/MyQrModal';
+import { RawTransaction, Category } from '@/types/finance';
+import { parseBankStatementLines } from '@/lib/pdfParser';
 import { enrichAndAnalyzeTransactions } from '@/lib/engine';
 
-export default function BankStatementParserApp() {
-  const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+export default function HappyPocketApp() {
+  const [balance, setBalance] = useState<number>(14524.91);
+  const [transactions, setTransactions] = useState<DisplayTransaction[]>(DEFAULT_RECENT_TRANSACTIONS);
+  const [activeTab, setActiveTab] = useState<NavTab>('home');
+  const [desktopMode, setDesktopMode] = useState<'phone' | 'wide'>('phone');
+  
+  // Financial engine state
   const [extractedRawTxs, setExtractedRawTxs] = useState<RawTransaction[]>([]);
   const [analysisResult, setAnalysisResult] = useState<ReturnType<typeof enrichAndAnalyzeTransactions> | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'insights' | 'transactions' | 'subscriptions' | 'sandbox'>('insights');
-  const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'insights' | 'ledger' | 'subscriptions' | 'sandbox'>('insights');
+  const [selectedLedgerFilter, setSelectedLedgerFilter] = useState<string>('all');
   const [userOverrides, setUserOverrides] = useState<Record<string, { category: Category; tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income' }>>({});
 
   // What-If Sandbox Parameters
   const [cancelZombieSub, setCancelZombieSub] = useState(false);
   const [trimDiningPercent, setTrimDiningPercent] = useState(15);
 
-  // Password Unlock Modal State
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [pdfPassword, setPdfPassword] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  // Modals state
+  const [isScanOpen, setIsScanOpen] = useState(false);
+  const [isSendOpen, setIsSendOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isQrOpen, setIsQrOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Account Aggregator (AA) Live Flow Simulator State
   const [isAAModalOpen, setIsAAModalOpen] = useState(false);
@@ -61,62 +80,30 @@ export default function BankStatementParserApp() {
   const [simPayee, setSimPayee] = useState('Swiggy');
   const [simAmount, setSimAmount] = useState('450');
   const [simApp, setSimApp] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | 'CRED'>('Google Pay');
-  const [liveToast, setLiveToast] = useState<string | null>(null);
 
-  // Send file to parser with optional password
-  const submitPdfForParsing = async (targetFile: File, pwd?: string) => {
-    setIsProcessing(true);
-    setErrorMessage(null);
-    setPasswordError(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
-    try {
-      const formData = new FormData();
-      formData.append('file', targetFile);
-      if (pwd) {
-        formData.append('password', pwd);
-      }
+  // Convert raw transactions to display transactions & update state
+  const syncTransactionsWithEngine = (rawTxs: RawTransaction[], overrides = userOverrides) => {
+    const analysis = enrichAndAnalyzeTransactions(rawTxs, overrides);
+    setAnalysisResult(analysis);
 
-      const res = await fetch('/api/parse-pdf', {
-        method: 'POST',
-        body: formData,
-      });
+    const converted: DisplayTransaction[] = analysis.enriched.map((item, idx) => ({
+      id: item.id || `stmt_tx_${Date.now()}_${idx}`,
+      title: item.cleanMerchant || item.payeeName || item.rawDescription,
+      rawTimeText: new Date(item.timestamp).toLocaleDateString('en-IN', {
+        month: 'short',
+        day: 'numeric',
+      }),
+      timestamp: item.timestamp,
+      amount: item.amount,
+      type: item.amount > 0 ? 'salary' : (item.category === 'Groceries' ? 'grocery' : item.category === 'Transport & Fuel' ? 'fuel' : item.isInternalTransfer ? 'transfer' : 'other'),
+    }));
 
-      const data = await res.json();
-
-      // Check if statement requires password
-      if (data.is_encrypted) {
-        setPendingFile(targetFile);
-        setIsPasswordModalOpen(true);
-        if (data.error === 'INCORRECT_PASSWORD') {
-          setPasswordError(data.message || 'Incorrect password.');
-        }
-        setIsProcessing(false);
-        return;
-      }
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to parse the bank statement PDF.');
-      }
-
-      if (data.transactions.length === 0) {
-        throw new Error('No debit/credit transaction entries found in this PDF.');
-      }
-
-      // Successful parse: close modal and set state
-      setIsPasswordModalOpen(false);
-      setPdfPassword('');
-      setPendingFile(null);
-      setFile(targetFile);
-      setExtractedRawTxs(data.transactions);
-
-      // Run Financial Visibility & Anti-Distortion Engine
-      const analyzed = enrichAndAnalyzeTransactions(data.transactions, userOverrides);
-      setAnalysisResult(analyzed);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to parse the bank statement PDF.');
-    } finally {
-      setIsProcessing(false);
-    }
+    setTransactions(converted);
   };
 
   // Human-in-the-Loop Category Override Handler
@@ -143,64 +130,75 @@ export default function BankStatementParserApp() {
     };
     setUserOverrides(updated);
     if (extractedRawTxs.length > 0) {
-      const reanalyzed = enrichAndAnalyzeTransactions(extractedRawTxs, updated);
-      setAnalysisResult(reanalyzed);
+      syncTransactionsWithEngine(extractedRawTxs, updated);
     }
   };
 
-  // Handle initial PDF selection
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+  // Handle successful payments
+  const handlePaymentSuccess = (amount: number, merchant: string) => {
+    setBalance((prev) => Math.max(0, prev - amount));
+    const rrn = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    const newTx: RawTransaction = {
+      id: `tx_${Date.now()}`,
+      accountId: 'acc_primary_sbi',
+      amount: -amount,
+      rawDescription: `UPI/DR/${rrn}/${merchant.toUpperCase()}/OKAXIS`,
+      currency: 'INR',
+      timestamp: new Date().toISOString(),
+      txMode: 'UPI',
+      upiRrn: rrn,
+      payeeName: merchant,
+      bankCode: 'OKAXIS',
+      remark: 'UPI Payment'
+    };
 
-    if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
-      setErrorMessage('Please upload a valid bank statement PDF file.');
-      return;
+    const nextRaw = [newTx, ...extractedRawTxs];
+    setExtractedRawTxs(nextRaw);
+    syncTransactionsWithEngine(nextRaw);
+    showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}`);
+  };
+
+  // Handle successful money transfers
+  const handleSendSuccess = (amount: number, recipient: string) => {
+    setBalance((prev) => Math.max(0, prev - amount));
+    const rrn = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    const newTx: RawTransaction = {
+      id: `tx_${Date.now()}`,
+      accountId: 'acc_primary_sbi',
+      amount: -amount,
+      rawDescription: `UPI/DR/${rrn}/TRANSFER TO ${recipient.toUpperCase()}`,
+      currency: 'INR',
+      timestamp: new Date().toISOString(),
+      txMode: 'UPI',
+      upiRrn: rrn,
+      payeeName: recipient,
+      remark: 'P2P Transfer'
+    };
+
+    const nextRaw = [newTx, ...extractedRawTxs];
+    setExtractedRawTxs(nextRaw);
+    syncTransactionsWithEngine(nextRaw);
+    showToast(`Sent ₹${amount.toLocaleString('en-IN')} to ${recipient}`);
+  };
+
+  // Handle imported statement items
+  const handleImportedTransactions = (imported: DisplayTransaction[], raw?: RawTransaction[]) => {
+    if (raw && raw.length > 0) {
+      setExtractedRawTxs(raw);
+      syncTransactionsWithEngine(raw);
+    } else {
+      setTransactions((prev) => [...imported, ...prev]);
     }
-
-    await submitPdfForParsing(selectedFile);
+    showToast(`Imported ${imported.length} statement records!`);
   };
 
-  // Handle password form submission
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pendingFile || !pdfPassword) return;
-    submitPdfForParsing(pendingFile, pdfPassword);
-  };
-
-  // Account Aggregator Workflow Handlers
-  const handleAASubmitMobile = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!aaMobile || aaMobile.length < 10) return;
-    setAaStep('OTP');
-  };
-
-  const handleAASubmitOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (aaOtp.length < 4) return;
-    setAaStep('SELECT_ACCOUNTS');
-  };
-
-  const handleAAAuthorize = async () => {
-    setAaStep('FETCHING');
-    setTimeout(() => {
-      // Simulate live encrypted fetch from SBI & Canara Bank
-      loadDemoStatement();
-      setAaStep('SUCCESS');
-      setTimeout(() => {
-        setIsAAModalOpen(false);
-        setAaStep('MOBILE');
-        setAaOtp('');
-      }, 1200);
-    }, 1500);
-  };
-
-  // Live Phone UPI Payment Trigger (simulates making a payment on GPay/PhonePe and receiving real-time bank event)
-  const handleLivePayment = (e: React.FormEvent) => {
+  // Live UPI Phone Payment Simulator Trigger
+  const handleLivePaymentSim = (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(simAmount);
     if (!amt || isNaN(amt)) return;
 
+    setBalance(prev => Math.max(0, prev - amt));
     const rrn = Math.floor(100000000000 + Math.random() * 900000000000).toString();
     const vpa = `${simPayee.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`;
     const newTx: RawTransaction = {
@@ -221,496 +219,686 @@ export default function BankStatementParserApp() {
 
     const updated = [newTx, ...extractedRawTxs];
     setExtractedRawTxs(updated);
-    const reanalyzed = enrichAndAnalyzeTransactions(updated, userOverrides);
-    setAnalysisResult(reanalyzed);
+    syncTransactionsWithEngine(updated);
 
-    // Trigger visual toast
-    setLiveToast(`⚡ Paid ₹${amt} to ${simPayee} via ${simApp}! Auto-ingested & classified.`);
+    showToast(`⚡ Paid ₹${amt} to ${simPayee} via ${simApp}! Auto-reflected in app.`);
     setIsPhoneSimOpen(false);
-    setTimeout(() => setLiveToast(null), 5000);
   };
 
-  // Demo sample loader for testing without needing a real statement right now
-  const loadDemoStatement = () => {
-    const demoLines = [
-      "HDFC BANK LIMITED - ACCOUNT STATEMENT",
-      "Account No: 50100412891920 Branch: KORAMANGALA",
-      "01/10/2026 SALARY CREDIT TECH CORP 75,000.00 CR",
-      "02/10/2026 UPI/429182/SWIGGY/swiggy@icici 450.00 DR",
-      "03/10/2026 TFR TO SELF MARCUS HYSA 15,000.00 DR",
-      "05/10/2026 NETFLIX ENTERTAINMENT MTHLY 649.00 DR",
-      "08/10/2026 SPOTIFY INDIA PREMIUM 119.00 DR",
-      "12/10/2026 UPI/391028/ZARA STORE 4,200.00 DR",
-      "15/10/2026 ZARA STORE RETURN REFUND 4,200.00 CR",
-      "16/10/2026 NOBU DINNER SHARABLE BILL 5,400.00 DR",
-      "17/10/2026 UPI/8812/P2P DINNER SPLIT REIMBURSEMENT 2,700.00 CR",
-      "20/10/2026 AVALON BAY RENT ACH 25,000.00 DR",
-      "22/10/2026 CON EDISON ELECTRICITY 1,850.00 DR",
-      "24/10/2026 LUMEN METABOLISM UNUSED SUB 2,999.00 DR"
-    ];
+  // Account Aggregator Workflow Handlers
+  const handleAASubmitMobile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aaMobile || aaMobile.length < 10) return;
+    setAaStep('OTP');
+  };
 
-    setIsProcessing(true);
-    setErrorMessage(null);
+  const handleAASubmitOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (aaOtp.length < 4) return;
+    setAaStep('SELECT_ACCOUNTS');
+  };
 
+  const handleAAAuthorize = async () => {
+    setAaStep('FETCHING');
     setTimeout(() => {
-      const rawTxs = parseBankStatementLines(demoLines);
-      setExtractedRawTxs(rawTxs);
-      const analyzed = enrichAndAnalyzeTransactions(rawTxs);
-      setAnalysisResult(analyzed);
-      setFile(new File(["demo"], "HDFC_Bank_E-Statement_Oct2026.pdf", { type: "application/pdf" }));
-      setIsProcessing(false);
-    }, 400);
+      const demoLines = [
+        "HDFC BANK LIMITED - ACCOUNT STATEMENT",
+        "Account No: 50100412891920 Branch: KORAMANGALA",
+        "01/10/2026 SALARY CREDIT TECH CORP 75,000.00 CR",
+        "02/10/2026 UPI/429182/SWIGGY/swiggy@icici 450.00 DR",
+        "03/10/2026 TFR TO SELF MARCUS HYSA 15,000.00 DR",
+        "05/10/2026 NETFLIX ENTERTAINMENT MTHLY 649.00 DR",
+        "08/10/2026 SPOTIFY INDIA PREMIUM 119.00 DR",
+        "12/10/2026 UPI/391028/ZARA STORE 4,200.00 DR",
+        "15/10/2026 ZARA STORE RETURN REFUND 4,200.00 CR",
+        "16/10/2026 NOBU DINNER SHARABLE BILL 5,400.00 DR",
+        "17/10/2026 UPI/8812/P2P DINNER SPLIT REIMBURSEMENT 2,700.00 CR",
+        "20/10/2026 AVALON BAY RENT ACH 25,000.00 DR",
+        "22/10/2026 CON EDISON ELECTRICITY 1,850.00 DR",
+        "24/10/2026 LUMEN METABOLISM UNUSED SUB 2,999.00 DR"
+      ];
+      const raw = parseBankStatementLines(demoLines);
+      setExtractedRawTxs(raw);
+      syncTransactionsWithEngine(raw);
+
+      setAaStep('SUCCESS');
+      setTimeout(() => {
+        setIsAAModalOpen(false);
+        setAaStep('MOBILE');
+        setAaOtp('');
+        showToast("Connected via RBI Account Aggregator! Streamed live records.");
+      }, 1000);
+    }, 1400);
   };
 
-  const handleReset = () => {
-    setFile(null);
-    setExtractedRawTxs([]);
-    setAnalysisResult(null);
-    setErrorMessage(null);
-  };
+  // Quick Action handlers
+  const handleScanPay = () => setIsScanOpen(true);
+  const handleSendMoney = () => setIsSendOpen(true);
+  const handleTransactionsClick = () => setActiveTab('history');
 
-  const filteredTransactions = analysisResult?.enriched.filter(tx => {
-    if (selectedFilter === 'recurring') return tx.isRecurring;
-    if (selectedFilter === 'transfer') return tx.isInternalTransfer;
-    if (selectedFilter === 'refund') return tx.isRefundOrReversal;
-    if (selectedFilter === 'split') return tx.isSharedSplitExpense;
+  const filteredLedger = analysisResult?.enriched.filter(tx => {
+    if (selectedLedgerFilter === 'recurring') return tx.isRecurring;
+    if (selectedLedgerFilter === 'transfer') return tx.isInternalTransfer;
+    if (selectedLedgerFilter === 'refund') return tx.isRefundOrReversal;
+    if (selectedLedgerFilter === 'split') return tx.isSharedSplitExpense;
     return true;
   }) || [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white">
-      {/* Top Navbar */}
-      <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <FileText className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-semibold text-white tracking-tight">FinLens PDF Parser</h1>
-                <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded-full font-mono border border-emerald-500/30">
-                  Client-Side PDF Engine
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Drop bank statement PDF $\to$ Clean, noise-free financial discovery</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsPhoneSimOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-cyan-300 bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 rounded-lg shadow-sm transition"
-              title="Simulate making a UPI payment on GPay/PhonePe and watch it auto-reflect live!"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
-              Simulate Live Payment (GPay/UPI)
-            </button>
-            <button
-              onClick={() => setIsAAModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 rounded-lg shadow-sm transition"
-              title="Connect bank via RBI Account Aggregator (OTP Consent)"
-            >
-              <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              Connect via AA
-            </button>
-            {!analysisResult ? (
-              <button
-                onClick={loadDemoStatement}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-lg transition"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Sample Bank Statement
-              </button>
-            ) : (
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-lg transition"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Upload Another Statement
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Real-time Event Toast Notification */}
-      {liveToast && (
-        <div className="fixed top-20 right-8 z-50 bg-gradient-to-r from-cyan-950 to-indigo-950 border border-cyan-500/60 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300">
-            <Zap className="w-5 h-5 animate-pulse text-cyan-400" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-white uppercase tracking-wider">Live Bank Feed Ingested</div>
-            <div className="text-xs text-cyan-200 mt-0.5">{liveToast}</div>
-          </div>
+    <div className="min-h-screen bg-[#EEF2F6] text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white relative">
+      
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-800 animate-bounce">
+          <Zap className="w-4 h-4 text-orange-400 shrink-0 animate-pulse" />
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Main Body */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+      {/* Top Desktop Helper / Mode Switcher Banner (Visible only on tablets & desktop >= 768px) */}
+      <aside aria-label="Desktop Viewport Switcher" className="hidden md:flex items-center justify-between px-8 py-3 bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40 text-xs shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('home')}>
+            <HappyPocketLogo size={32} />
+            <span className="font-extrabold text-sm tracking-tight text-slate-900">
+              Happy Pocket
+            </span>
+          </div>
+          <span className="h-4 w-px bg-slate-200" />
+          <span className="text-slate-500 font-medium">
+            Smart UPI Banking & Zero-Distortion Financial Visibility
+          </span>
+        </div>
+
+        {/* Action Controls & Simulator Buttons */}
+        <div className="flex items-center gap-2">
+          {/* Simulate Live Payment */}
+          <button
+            type="button"
+            onClick={() => setIsPhoneSimOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#F97316] font-bold transition border border-orange-200 shadow-xs cursor-pointer"
+            title="Simulate making a payment on GPay/PhonePe and watch it auto-reflect in app!"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>Simulate Live Payment</span>
+          </button>
+
+          {/* Connect via AA */}
+          <button
+            type="button"
+            onClick={() => setIsAAModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold transition border border-emerald-200 shadow-xs cursor-pointer"
+            title="Connect bank accounts via RBI Account Aggregator"
+          >
+            <Zap className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Connect via AA</span>
+          </button>
+
+          {/* Import Statement */}
+          <button
+            type="button"
+            onClick={() => setIsUploadOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold transition shadow-xs cursor-pointer"
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            <span>Upload Statement</span>
+          </button>
+
+          <span className="h-4 w-px bg-slate-200 mx-1" />
+
+          {/* View Switcher Toggle */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setDesktopMode('phone')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                desktopMode === 'phone'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Smartphone className="w-3 h-3 text-orange-500" />
+              <span>Mobile</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDesktopMode('wide')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                desktopMode === 'wide'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Monitor className="w-3 h-3 text-orange-500" />
+              <span>Dashboard</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col items-center justify-center p-0 sm:p-4 md:p-8">
         
-        {/* Upload State (if no file analyzed yet) */}
-        {!analysisResult && (
-          <div className="max-w-2xl mx-auto space-y-6 pt-6">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-white tracking-tight">Parse Your Bank Statement PDF</h2>
-              <p className="text-sm text-slate-400">
-                Extracts raw transactions directly in your browser. Self-transfers, refunds, and split bills are reconciled automatically.
-              </p>
-            </div>
-
-            <div className="border-2 border-dashed border-slate-800 hover:border-indigo-500/80 rounded-3xl p-10 text-center transition bg-slate-900/40 relative group">
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={handleFileChange}
-                disabled={isProcessing}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                id="pdfStatementUpload"
-              />
-              <div className="flex flex-col items-center pointer-events-none">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 group-hover:scale-110 transition duration-300">
-                  <UploadCloud className="w-8 h-8" />
+        {/* ======================================================== */}
+        {/* VIEW 1: PHONE MOCKUP VIEW (Pixel-perfect mobile experience) */}
+        {/* ======================================================== */}
+        {(desktopMode === 'phone' || typeof window === 'undefined') && (
+          <div className="w-full max-w-[420px] mx-auto md:my-4 transition-all duration-300">
+            {/* Phone outer bezel on desktop / clean on mobile */}
+            <div className="w-full bg-[#EEF2F6] md:bg-white md:p-3 md:rounded-[52px] md:shadow-[0_25px_70px_rgba(15,23,42,0.14)] md:border-[8px] md:border-slate-800/90 relative overflow-hidden">
+              
+              {/* Phone Inner Screen Container */}
+              <div className="w-full bg-[#EEF2F6] min-h-[820px] rounded-[36px] sm:rounded-[44px] flex flex-col justify-between overflow-hidden relative">
+                
+                {/* 1. Mobile Status Bar (9:41, Signal, Battery) */}
+                <div className="w-full pt-3 px-7 flex items-center justify-between text-slate-800 select-none">
+                  <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
+                  
+                  {/* Status Bar Icons */}
+                  <div className="flex items-center gap-1.5 text-slate-800">
+                    <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor">
+                      <rect x="0" y="8" width="3" height="4" rx="1" />
+                      <rect x="4.5" y="5" width="3" height="7" rx="1" />
+                      <rect x="9" y="2.5" width="3" height="9.5" rx="1" />
+                      <rect x="13.5" y="0" width="3" height="12" rx="1" />
+                    </svg>
+                    <Wifi className="w-4 h-4 stroke-[2.4]" />
+                    <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
+                      <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-base font-semibold text-white">Drag & drop your bank statement PDF</h3>
-                <p className="text-xs text-slate-400 mt-1">Supports HDFC, ICICI, SBI, Axis, Chase, Bank of America, etc.</p>
-                <div className="mt-4 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-medium shadow-md shadow-indigo-600/30">
-                  Browse Files
+
+                {/* 2. App Header (Mascot & User Avatar) */}
+                <div className="px-6 pt-3 pb-2 flex items-center justify-between">
+                  {/* Left: Mascot Character */}
+                  <div className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform" onClick={() => setActiveTab('home')}>
+                    <HappyPocketLogo size={58} />
+                  </div>
+
+                  {/* Right: Circular User Avatar */}
+                  <div 
+                    onClick={() => setActiveTab('profile')}
+                    className="relative w-11 h-11 rounded-full overflow-hidden border-2 border-white shadow-md cursor-pointer hover:ring-2 hover:ring-orange-400 transition"
+                  >
+                    <Image
+                      src="/avatar.jpg"
+                      alt="User Avatar"
+                      fill
+                      sizes="44px"
+                      priority
+                      className="object-cover"
+                    />
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {isProcessing && (
-              <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-center gap-3 text-xs text-indigo-200">
-                <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
-                Extracting transaction stream and running anti-distortion analysis...
-              </div>
-            )}
+                {/* 3. Screen Scrollable Body Content */}
+                <div className="px-5 py-2 flex-1 space-y-4 sm:space-y-5 overflow-y-auto max-h-[660px] pb-24">
+                  {activeTab === 'home' && (
+                    <>
+                      {/* Signature Account Card */}
+                      <AccountCard
+                        accountName="Savings Account"
+                        accountNumberMask="•••• 5274"
+                        balance={balance}
+                      />
 
-            {errorMessage && (
-              <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/30 flex items-start gap-3 text-xs text-rose-300">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
+                      {/* 3 Quick Action Buttons */}
+                      <ActionButtons
+                        onScanPayClick={handleScanPay}
+                        onSendMoneyClick={handleSendMoney}
+                        onTransactionsClick={handleTransactionsClick}
+                      />
 
-            {/* Quick Privacy Assurance Card */}
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex items-center gap-3">
-              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>
-                <strong>100% Client-Side Privacy:</strong> Your statement is parsed locally inside your browser via WebAssembly/pdfjs. No financial records are sent to external cloud servers.
-              </span>
+                      {/* Financial Distortion Deduction Pill */}
+                      {analysisResult && (
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#0A172E] text-white shadow-md space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              Noise Filtered Spend
+                            </span>
+                            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
+                              Zero Distortion
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between">
+                            <div>
+                              <div className="text-lg font-bold font-mono">
+                                ₹{analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                True living outflow (excl. transfers & refunds)
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDesktopMode('wide')}
+                              className="text-[11px] text-orange-400 hover:text-orange-300 font-bold underline"
+                            >
+                              Explore Deep Analytics &rarr;
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Recent Transactions List */}
+                      <RecentTransactions
+                        transactions={transactions.slice(0, 5)}
+                        onViewAll={() => setActiveTab('history')}
+                      />
+                    </>
+                  )}
+
+                  {activeTab === 'payments' && (
+                    <PaymentsTab
+                      onScanClick={handleScanPay}
+                      onSendClick={handleSendMoney}
+                    />
+                  )}
+
+                  {activeTab === 'history' && (
+                    <HistoryTab
+                      transactions={transactions}
+                      onOpenUpload={() => setIsUploadOpen(true)}
+                    />
+                  )}
+
+                  {activeTab === 'profile' && (
+                    <ProfileTab onShowQR={() => setIsQrOpen(true)} />
+                  )}
+                </div>
+
+                {/* 4. Bottom Navigation Bar */}
+                <div className="absolute bottom-0 inset-x-0 z-30">
+                  <BottomNav
+                    activeTab={activeTab}
+                    onChangeTab={(t) => setActiveTab(t)}
+                  />
+                </div>
+
+              </div>
             </div>
           </div>
         )}
 
-        {/* Results Dashboard (After Parsing) */}
-        {analysisResult && (
-          <div className="space-y-6">
-            {/* File info pill */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-slate-900/70 border border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
+        {/* ======================================================== */}
+        {/* VIEW 2: RESPONSIVE WIDE DASHBOARD VIEW (Desktop Full Screen) */}
+        {/* ======================================================== */}
+        {desktopMode === 'wide' && (
+          <div className="w-full max-w-6xl mx-auto space-y-6 transition-all duration-300 py-4 px-4 sm:px-6">
+            
+            {/* Top Brand Banner */}
+            <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-[32px] bg-white border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center gap-4">
+                <HappyPocketLogo size={56} />
                 <div>
-                  <div className="text-xs font-semibold text-white">{file?.name || 'Bank_Statement.pdf'}</div>
-                  <div className="text-[10px] text-slate-400">
-                    Parsed {extractedRawTxs.length} transaction entries $\cdot$ Noise Filtering Applied
-                  </div>
+                  <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                    Happy Pocket Intelligence Center
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Unified UPI banking, NPCI RRN Dissection & Hidden Expense Discovery
+                  </p>
                 </div>
               </div>
 
-              {/* Navigation tabs */}
-              <div className="flex gap-2">
-                {[
-                  { id: 'insights', label: 'Financial Discovery' },
-                  { id: 'transactions', label: `Normalized Ledger (${analysisResult.enriched.length})` },
-                  { id: 'subscriptions', label: `Recurring Drains (${analysisResult.subscriptions.length})` },
-                  { id: 'sandbox', label: 'What-If Savings Sandbox' }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                      activeTab === tab.id 
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPhoneSimOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition shadow-sm cursor-pointer"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Simulate Phone Payment</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAAModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-sm cursor-pointer"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Connect AA</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsUploadOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-sm cursor-pointer"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>Upload PDF</span>
+                </button>
               </div>
             </div>
 
-            {/* VIEW 1: INSIGHTS & NOISE DEDUCTION */}
-            {activeTab === 'insights' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {/* Spend Metric */}
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/70 border border-slate-800">
-                    <span className="text-xs uppercase font-semibold text-slate-400">True Living Outflow</span>
-                    <div className="text-2xl font-bold font-mono text-white mt-2">
-                      ₹{analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            {/* Split Grid: Left Account & KPIs / Right Interactive Analytics */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* Left Column (5 Cols): Card, Action Buttons & Deduction Highlights */}
+              <div className="lg:col-span-5 space-y-5">
+                <AccountCard
+                  accountName="Savings Account (Primary)"
+                  accountNumberMask="•••• 5274"
+                  balance={balance}
+                />
+
+                <div className="p-1 bg-white rounded-[26px] border border-slate-100 shadow-sm">
+                  <ActionButtons
+                    onScanPayClick={handleScanPay}
+                    onSendMoneyClick={handleSendMoney}
+                    onTransactionsClick={handleTransactionsClick}
+                  />
+                </div>
+
+                {/* Anti-Distortion Noise Deductions Box */}
+                <div className="rounded-[28px] bg-gradient-to-br from-slate-900 to-[#0A172E] p-6 text-white shadow-lg space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Anti-Distortion Engine
+                    </span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
+                      Active
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                      <span className="text-[11px] text-slate-400 block">Self-Transfers Filtered</span>
+                      <span className="text-sm font-bold font-mono text-white mt-1 block">
+                        ₹{analysisResult ? analysisResult.kpis.internalTransfersDetected.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '15,000.00'}
+                      </span>
+                      <span className="text-[10px] text-emerald-400">Excluded from spend</span>
                     </div>
-                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                      <span className="line-through text-slate-500">₹{analysisResult.kpis.rawOutflows.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      <span className="text-emerald-400 font-semibold">
-                        (-₹{(analysisResult.kpis.rawOutflows - analysisResult.kpis.trueLivingExpenses).toLocaleString('en-IN', { minimumFractionDigits: 2 })} noise filtered)
+                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                      <span className="text-[11px] text-slate-400 block">Refunds Reconciled</span>
+                      <span className="text-sm font-bold font-mono text-cyan-300 mt-1 block">
+                        ₹{analysisResult ? analysisResult.kpis.refundsReconciled.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '4,200.00'}
+                      </span>
+                      <span className="text-[10px] text-cyan-400">Paired with purchase</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] text-slate-400 block">True Living Outflow</span>
+                      <span className="text-base font-bold font-mono text-white">
+                        ₹{analysisResult ? analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '31,540.00'}
                       </span>
                     </div>
-
-                    <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-400 space-y-1">
-                      <div className="flex justify-between">
-                        <span>Self-Transfers excluded:</span>
-                        <span className="font-mono text-slate-200">₹{analysisResult.kpis.internalTransfersDetected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Refunds paired:</span>
-                        <span className="font-mono text-cyan-300">₹{analysisResult.kpis.refundsReconciled.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>P2P Received:</span>
-                        <span className="font-mono text-indigo-300">₹{analysisResult.kpis.sharedBillCredits.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Recurring Subscriptions */}
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/70 border border-slate-800">
-                    <span className="text-xs uppercase font-semibold text-slate-400">Monthly Recurring Burden</span>
-                    <div className="text-2xl font-bold font-mono text-white mt-2">
-                      ₹{analysisResult.kpis.monthlyRecurringCommitments.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      <span className="text-xs font-normal text-slate-400"> / mo</span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      ₹{(analysisResult.kpis.monthlyRecurringCommitments * 12).toLocaleString('en-IN', { minimumFractionDigits: 2 })} annual drain across detected subscriptions.
-                    </p>
-                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-between text-xs">
-                      <span className="text-indigo-400">Active Mandates:</span>
-                      <span className="font-mono font-bold text-indigo-300">{analysisResult.subscriptions.length} detected</span>
-                    </div>
-                  </div>
-
-                  {/* Net Liquidity */}
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/70 border border-slate-800">
-                    <span className="text-xs uppercase font-semibold text-slate-400">Parsed Statement Net Flow</span>
-                    <div className="text-2xl font-bold font-mono text-emerald-400 mt-2">
-                      +₹{(
-                        analysisResult.enriched.filter(t => t.amount > 0 && !t.isInternalTransfer).reduce((s, t) => s + t.amount, 0) -
-                        analysisResult.kpis.trueLivingExpenses
-                      ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Net positive cash flow remaining after genuine living expenses.
-                    </p>
-                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-between text-xs">
-                      <span className="text-slate-400">Savings Rate:</span>
-                      <span className="font-semibold text-cyan-400">
-                        {((1 - (analysisResult.kpis.trueLivingExpenses / Math.max(1, analysisResult.enriched.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0)))) * 100).toFixed(1)}%
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block">Noise Deduction</span>
+                      <span className="text-xs font-bold font-mono text-emerald-400">
+                        -₹{analysisResult ? (analysisResult.kpis.rawOutflows - analysisResult.kpis.trueLivingExpenses).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '19,200.00'}
                       </span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Highlighted Detections */}
-                <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-                  <h3 className="text-sm font-semibold text-white">Detection Engine Highlights in This Statement</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {analysisResult.enriched.filter(t => t.anomalyWarning || t.isInternalTransfer || t.isSharedSplitExpense).map((tx, idx) => (
-                      <div key={idx} className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400 mt-0.5">
-                          <Tag className="w-4 h-4" />
+              {/* Right Column (7 Cols): Multi-Tab Engine Discovery */}
+              <div className="lg:col-span-7 space-y-5">
+                
+                {/* Secondary Tab Switcher */}
+                <div className="flex items-center gap-1.5 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.03)] overflow-x-auto">
+                  {[
+                    { id: 'insights', label: 'Financial Discovery' },
+                    { id: 'ledger', label: `Normalized Ledger (${analysisResult ? analysisResult.enriched.length : transactions.length})` },
+                    { id: 'subscriptions', label: `Recurring Drains (${analysisResult ? analysisResult.subscriptions.length : 2})` },
+                    { id: 'sandbox', label: 'What-If Savings Sandbox' },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setAnalyticsSubTab(t.id as any)}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                        analyticsSubTab === t.id
+                          ? 'bg-orange-500 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* SubTab 1: Financial Discovery & Insights */}
+                {analyticsSubTab === 'insights' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Monthly Commitments</span>
+                        <div className="text-2xl font-bold font-mono text-slate-900">
+                          ₹{analysisResult ? analysisResult.kpis.monthlyRecurringCommitments.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '768.00'}
+                          <span className="text-xs font-normal text-slate-500"> /mo</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-semibold text-white truncate">{tx.cleanMerchant}</span>
-                            <span className="text-xs font-mono text-slate-300">${Math.abs(tx.amount).toFixed(2)}</span>
+                        <p className="text-[11px] text-slate-500">
+                          ₹{analysisResult ? (analysisResult.kpis.monthlyRecurringCommitments * 12).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '9,216.00'} annual burden across digital mandates.
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Verified Savings Rate</span>
+                        <div className="text-2xl font-bold font-mono text-emerald-600">
+                          {analysisResult ? ((1 - (analysisResult.kpis.trueLivingExpenses / Math.max(1, analysisResult.enriched.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 75000)))) * 100).toFixed(1) : '57.9'}%
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Discretionary spend remaining after clean living expenses.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-3">
+                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                        Engine Highlights & Automated Reconciliations
+                      </h3>
+                      <div className="space-y-2">
+                        {[
+                          { title: 'Self-Transfer Excluded', desc: 'Transfer of ₹15,000 to Marcus HYSA excluded from expense baseline.', tag: 'Auto-Matched' },
+                          { title: 'Refund Paired', desc: 'Zara Store return refund of ₹4,200 offset original debit with zero net distortion.', tag: 'Offset Paired' },
+                          { title: 'P2P Dinner Split Receipt', desc: 'P2P reimbursement of ₹2,700 credited against Nobu dinner bill.', tag: 'Reimbursed' }
+                        ].map((item, idx) => (
+                          <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between">
+                            <div>
+                              <div className="text-xs font-bold text-slate-900">{item.title}</div>
+                              <div className="text-[11px] text-slate-500">{item.desc}</div>
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                              {item.tag}
+                            </span>
                           </div>
-                          <p className="text-xs text-indigo-300 font-medium mt-1">
-                            {tx.anomalyWarning || (tx.isInternalTransfer ? 'Self-transfer excluded from spending' : 'Shared split bill reconciled')}
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SubTab 2: Normalized Ledger */}
+                {analyticsSubTab === 'ledger' && (
+                  <div className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Filter className="w-3.5 h-3.5 text-slate-400" />
+                        <select
+                          value={selectedLedgerFilter}
+                          onChange={e => setSelectedLedgerFilter(e.target.value)}
+                          className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-2.5 py-1.5 text-slate-700 focus:outline-none"
+                        >
+                          <option value="all">All Transactions ({analysisResult ? analysisResult.enriched.length : transactions.length})</option>
+                          <option value="recurring">Recurring Only</option>
+                          <option value="transfer">Self-Transfers Only</option>
+                          <option value="refund">Refunds Only</option>
+                          <option value="split">Shared Splits Only</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold sticky top-0">
+                          <tr>
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3">Beneficiary / Merchant</th>
+                            <th className="py-2.5 px-3">Mode / RRN</th>
+                            <th className="py-2.5 px-3">Category</th>
+                            <th className="py-2.5 px-3 text-right">Amount</th>
+                            <th className="py-2.5 px-3 text-center">Status</th>
+                            <th className="py-2.5 px-3 text-center">Override</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {analysisResult ? (
+                            filteredLedger.map((tx) => {
+                              const isInflow = tx.amount > 0;
+                              return (
+                                <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                                  <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap font-mono text-[11px]">
+                                    {new Date(tx.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                                  </td>
+                                  <td className="py-2.5 px-3 max-w-[180px]">
+                                    <div className="font-bold text-slate-900 truncate">
+                                      {tx.payeeName || tx.cleanMerchant}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-mono truncate" title={tx.rawDescription}>
+                                      {tx.vpaHandle ? `@${tx.vpaHandle}` : tx.bankCode || 'UPI'}
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 px-3 whitespace-nowrap">
+                                    <span className="font-bold text-slate-700 block">{tx.txMode || 'UPI'}</span>
+                                    <span className="text-[10px] text-slate-400 font-mono">
+                                      {tx.upiRrn ? `${tx.upiRrn}` : ''}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3 whitespace-nowrap">
+                                    <span className="font-medium text-slate-700">{tx.category}</span>
+                                  </td>
+                                  <td className={`py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap ${
+                                    isInflow ? 'text-emerald-600' : 'text-slate-900'
+                                  }`}>
+                                    {isInflow ? '+' : '-'}₹{Math.abs(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                    {tx.isInternalTransfer && (
+                                      <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                                        Self-Transfer
+                                      </span>
+                                    )}
+                                    {tx.isRefundOrReversal && (
+                                      <span className="bg-cyan-100 text-cyan-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                                        Refund Paired
+                                      </span>
+                                    )}
+                                    {tx.isSharedSplitExpense && (
+                                      <span className="bg-indigo-100 text-indigo-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                                        Split Reconciled
+                                      </span>
+                                    )}
+                                    {tx.isRecurring && (
+                                      <span className="bg-rose-100 text-rose-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                                        Recurring
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRecategorize(tx.id, tx.category)}
+                                      className="inline-flex items-center gap-1 text-[11px] text-orange-600 hover:text-orange-700 font-bold transition"
+                                      title="Cycle category"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                      Adjust
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            transactions.map((tx) => (
+                              <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                                <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap font-mono text-[11px]">
+                                  {tx.rawTimeText || 'Today'}
+                                </td>
+                                <td className="py-2.5 px-3 font-bold text-slate-900">
+                                  {tx.title}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-slate-500">
+                                  UPI
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-600 capitalize">
+                                  {tx.type}
+                                </td>
+                                <td className={`py-2.5 px-3 text-right font-mono font-bold ${
+                                  tx.amount > 0 ? 'text-emerald-600' : 'text-slate-900'
+                                }`}>
+                                  {tx.amount > 0 ? '+₹' : '-₹'}{Math.abs(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span className="bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded-full">
+                                    Verified
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center text-slate-400">
+                                  -
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* SubTab 3: Recurring Drains & Subscriptions */}
+                {analyticsSubTab === 'subscriptions' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {(analysisResult?.subscriptions && analysisResult.subscriptions.length > 0
+                      ? analysisResult.subscriptions
+                      : [
+                          { merchant: 'Netflix India', monthlyCost: 649, annualImpact: 7788, category: 'Subscriptions & Digital', status: 'ACTIVE_RECURRING' },
+                          { merchant: 'Spotify Premium', monthlyCost: 119, annualImpact: 1428, category: 'Subscriptions & Digital', status: 'ACTIVE_RECURRING' }
+                        ]
+                    ).map((sub, idx) => (
+                      <div key={idx} className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                              {sub.category}
+                            </span>
+                            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
+                              AutoPay Active
+                            </span>
+                          </div>
+                          <h4 className="text-base font-bold text-slate-900">{sub.merchant}</h4>
+                          <div className="text-2xl font-bold font-mono text-slate-900 mt-2">
+                            ₹{sub.monthlyCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <span className="text-xs font-normal text-slate-500"> /mo</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            Annual Drain: ₹{sub.annualImpact.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </p>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* VIEW 2: NORMALIZED LEDGER */}
-            {activeTab === 'transactions' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-3.5 h-3.5 text-slate-400" />
-                    <select
-                      value={selectedFilter}
-                      onChange={e => setSelectedFilter(e.target.value)}
-                      className="bg-slate-900 border border-slate-800 rounded-lg text-xs px-2.5 py-1.5 text-slate-300"
-                    >
-                      <option value="all">All Transactions ({analysisResult.enriched.length})</option>
-                      <option value="recurring">Recurring Only</option>
-                      <option value="transfer">Self-Transfers Only</option>
-                      <option value="refund">Refunds Only</option>
-                      <option value="split">Shared Bill Splits Only</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/30">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-900/80 text-slate-400 border-b border-slate-800 uppercase tracking-wider font-semibold">
-                      <tr>
-                        <th className="py-3 px-4">Date</th>
-                        <th className="py-3 px-4">Mode / RRN</th>
-                        <th className="py-3 px-4">Beneficiary / Merchant</th>
-                        <th className="py-3 px-4">Bank / VPA</th>
-                        <th className="py-3 px-4">Category</th>
-                        <th className="py-3 px-4 text-right">Statement Amt</th>
-                        <th className="py-3 px-4 text-right">Net Spend</th>
-                        <th className="py-3 px-4 text-center">Engine Tag</th>
-                        <th className="py-3 px-4 text-center">Override</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {filteredTransactions.map(tx => {
-                        const isInflow = tx.amount > 0;
-                        return (
-                          <tr key={tx.id} className="hover:bg-slate-800/40 transition">
-                            <td className="py-3 px-4 text-slate-400 whitespace-nowrap font-mono">
-                              {new Date(tx.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span className="font-semibold text-slate-300 block">{tx.txMode || 'TRANSFER'}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">
-                                {tx.upiRrn ? `RRN: ${tx.upiRrn}` : ''}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 max-w-xs">
-                              <div className="font-bold text-white text-sm">
-                                {tx.payeeName || tx.cleanMerchant}
-                              </div>
-                              <div className="text-[10px] text-slate-500 font-mono truncate" title={tx.rawDescription}>
-                                {tx.remark && tx.remark !== 'UPI' ? `Note: "${tx.remark}" · ` : ''}
-                                {tx.terminalRef ? `${tx.terminalRef}` : ''}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span className="font-mono text-xs text-indigo-300 font-semibold block">
-                                {tx.bankCode || 'UPI'}
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400 block truncate max-w-[130px]" title={tx.vpaHandle}>
-                                {tx.vpaHandle ? `@${tx.vpaHandle}` : '-'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span className="font-medium text-slate-300">{tx.category}</span>
-                            </td>
-                            <td className={`py-3 px-4 text-right font-mono font-medium whitespace-nowrap ${
-                              isInflow ? 'text-emerald-400' : 'text-slate-300'
-                            }`}>
-                              {isInflow ? '+' : '-'}₹{Math.abs(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold whitespace-nowrap text-white">
-                              {tx.isInternalTransfer ? (
-                                <span className="text-slate-500 line-through">₹0.00</span>
-                              ) : (
-                                `₹${tx.netOutflowAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-center whitespace-nowrap">
-                              {tx.isInternalTransfer && (
-                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                  Self-Transfer
-                                </span>
-                              )}
-                              {tx.isRefundOrReversal && (
-                                <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                  Refund Paired
-                                </span>
-                              )}
-                              {tx.isSharedSplitExpense && (
-                                <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                  Split Reimbursed
-                                </span>
-                              )}
-                              {tx.isRecurring && (
-                                <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                  AutoPay / Recurring
-                                </span>
-                              )}
-                              {tx.userOverridden && (
-                                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium ml-1">
-                                  User Adjusted
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-center whitespace-nowrap">
-                              <button
-                                onClick={() => handleRecategorize(tx.id, tx.category)}
-                                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-indigo-400 transition"
-                                title="Click to cycle category"
-                              >
-                                <Edit3 className="w-3 h-3" />
-                                Override
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* VIEW 3: RECURRING DRAINS */}
-            {activeTab === 'subscriptions' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {analysisResult.subscriptions.map((sub, idx) => (
-                  <div key={idx} className="p-5 rounded-xl border border-slate-800 bg-slate-900/50 flex flex-col justify-between">
+                {/* SubTab 4: What-If Savings Sandbox */}
+                {analyticsSubTab === 'sandbox' && (
+                  <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-4">
                     <div>
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-medium">{sub.category}</span>
-                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full">{sub.status}</span>
-                      </div>
-                      <h4 className="text-lg font-bold text-white">{sub.merchant}</h4>
-                      <div className="text-2xl font-bold font-mono text-white mt-2">
-                        ₹{sub.monthlyCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}/mo
-                      </div>
-                      <div className="text-xs text-slate-400 mt-1">
-                        Annual Impact: ₹{sub.annualImpact.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </div>
+                      <h3 className="text-sm font-bold text-slate-900">What-If Financial Sandbox</h3>
+                      <p className="text-xs text-slate-500">
+                        Adjust parameters to calculate compound wealth impact over 1 year and 5 years.
+                      </p>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
 
-            {/* VIEW 4: WHAT-IF SAVINGS SANDBOX */}
-            {activeTab === 'sandbox' && (
-              <div className="space-y-6">
-                <div className="bg-slate-900/60 p-5 rounded-2xl border border-slate-800">
-                  <h3 className="text-base font-semibold text-white mb-1">Financial Adjustment & What-If Scenario Sandbox</h3>
-                  <p className="text-xs text-slate-400">
-                    Explore actionable adjustments: calculate how cutting unnecessary commitments or dialing back discretionary categories changes your wealth growth.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Controls */}
-                  <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-6">
-                    <h4 className="text-sm font-semibold text-white uppercase tracking-wider">Adjustment Levers</h4>
-
-                    {/* Lever 1: Discretionary Spend Slider */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300 font-medium">Trim Discretionary (Shopping & Dining)</span>
-                        <span className="font-mono text-indigo-400">{trimDiningPercent}% reduction</span>
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800">
+                          Trim Discretionary / Food Delivery Spend: {trimDiningPercent}%
+                        </label>
+                        <span className="text-xs font-mono font-bold text-orange-600">
+                          ₹{((4200 * trimDiningPercent) / 100).toFixed(0)} saved/mo
+                        </span>
                       </div>
                       <input
                         type="range"
@@ -718,477 +906,364 @@ export default function BankStatementParserApp() {
                         max="50"
                         step="5"
                         value={trimDiningPercent}
-                        onChange={e => setTrimDiningPercent(parseInt(e.target.value))}
-                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        onChange={e => setTrimDiningPercent(Number(e.target.value))}
+                        className="w-full accent-orange-500 cursor-pointer"
                       />
-                      <div className="flex justify-between text-[10px] text-slate-500">
-                        <span>0% (As-is)</span>
-                        <span>25% (Moderate)</span>
-                        <span>50% (High discipline)</span>
-                      </div>
                     </div>
 
-                    {/* Lever 2: Subscriptions Toggle */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300 font-medium">Cancel Forgotten Digital Subscriptions</span>
-                        <span className="font-mono text-emerald-400">
-                          +₹{(analysisResult.subscriptions.length > 0 ? analysisResult.subscriptions[0].monthlyCost : 0).toLocaleString('en-IN')}/mo
-                        </span>
-                      </div>
-                      <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={cancelZombieSub}
-                          onChange={e => setCancelZombieSub(e.target.checked)}
-                          className="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 w-4 h-4"
-                        />
-                        <div className="text-xs">
-                          <div className="text-white font-medium">Terminate inactive recurring subscriptions</div>
-                          <div className="text-slate-500">Eliminates unused recurring drain with 0 lifestyle disruption.</div>
+                    <div className="grid grid-cols-2 gap-4 pt-1">
+                      <div className="p-4 rounded-xl bg-orange-50 border border-orange-200 text-center">
+                        <span className="text-[11px] font-bold text-orange-800 block">1-Year Wealth Impact</span>
+                        <div className="text-xl font-bold font-mono text-orange-600 mt-1">
+                          +₹{(((4200 * trimDiningPercent) / 100) * 12).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         </div>
-                      </label>
+                        <span className="text-[10px] text-orange-700">Accumulated surplus</span>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+                        <span className="text-[11px] font-bold text-emerald-800 block">5-Year SIP Impact (12% CAGR)</span>
+                        <div className="text-xl font-bold font-mono text-emerald-600 mt-1">
+                          +₹{((((4200 * trimDiningPercent) / 100) * 12 * 5) * 1.35).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </div>
+                        <span className="text-[10px] text-emerald-700">Compounded investment</span>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Projected Savings Card */}
-                  {(() => {
-                    const discretionarySpend = analysisResult.enriched
-                      .filter(t => t.tier === 'Discretionary' && t.amount < 0)
-                      .reduce((s, t) => s + t.netOutflowAmount, 0);
-                    const subTrim = cancelZombieSub && analysisResult.subscriptions.length > 0 ? analysisResult.subscriptions[0].monthlyCost : 0;
-                    const monthlySavings = (discretionarySpend * (trimDiningPercent / 100)) + subTrim;
-
-                    return (
-                      <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-indigo-500/30 flex flex-col justify-between">
-                        <div>
-                          <span className="text-xs uppercase font-semibold tracking-wider text-indigo-300">Projected Compounding Value</span>
-                          <div className="text-4xl font-extrabold font-mono text-white mt-2">
-                            +₹{monthlySavings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            <span className="text-sm font-normal text-slate-400"> / month</span>
-                          </div>
-                          <p className="text-xs text-slate-400 mt-2">
-                            Free cash flow unlocked without altering essential needs (Rent, Electricity, Groceries).
-                          </p>
-
-                          <div className="mt-8 space-y-3">
-                            <div className="flex justify-between items-center p-3 rounded-lg bg-slate-950/60 border border-slate-800">
-                              <span className="text-xs text-slate-400">1-Year Direct Cash Boost:</span>
-                              <span className="text-sm font-mono font-bold text-emerald-400">
-                                +₹{(monthlySavings * 12).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center p-3 rounded-lg bg-slate-950/60 border border-slate-800">
-                              <span className="text-xs text-slate-400">5-Year Growth (at 7% return):</span>
-                              <span className="text-sm font-mono font-bold text-cyan-400">
-                                +₹{(monthlySavings * 12 * 5 * 1.15).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-6 pt-4 border-t border-slate-800 text-[11px] text-slate-500">
-                          Maintains your historical emergency liquidity and high-yield savings interest.
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Password Unlock Modal */}
-        {isPasswordModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                    <Lock className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-white">Statement is Encrypted</h3>
-                    <p className="text-xs text-slate-400">{pendingFile?.name || 'Bank_Statement.pdf'}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setIsPasswordModalOpen(false);
-                    setPendingFile(null);
-                    setPdfPassword('');
-                  }}
-                  className="text-slate-400 hover:text-white text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-                    Enter PDF Password
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="e.g. DDMMYYYY or PAN in lowercase"
-                    value={pdfPassword}
-                    onChange={e => setPdfPassword(e.target.value)}
-                    autoFocus
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none transition font-mono tracking-wider"
-                  />
-                </div>
-
-                {passwordError && (
-                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>{passwordError}</span>
                   </div>
                 )}
 
-                {/* Helpful Hints for Indian Banks */}
-                <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
-                  <div className="font-semibold text-slate-300">Common Bank Password Formats:</div>
-                  <ul className="list-disc list-inside space-y-0.5 text-slate-400">
-                    <li><strong className="text-slate-300">SBI:</strong> 11-digit Account No. or DOB (DDMMYYYY) + last 5 digits of mobile.</li>
-                    <li><strong className="text-slate-300">HDFC:</strong> NetBanking Customer ID or DOB (DDMMYYYY).</li>
-                    <li><strong className="text-slate-300">ICICI / Axis:</strong> DOB (DDMMYYYY) or PAN in lowercase.</li>
-                  </ul>
-                </div>
-
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsPasswordModalOpen(false);
-                      setPendingFile(null);
-                      setPdfPassword('');
-                    }}
-                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isProcessing || !pdfPassword}
-                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Decrypting...
-                      </>
-                    ) : (
-                      'Unlock & Parse Statement'
-                    )}
-                  </button>
-                </div>
-              </form>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Account Aggregator (AA) Consent Flow Simulator Modal */}
-        {isAAModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-start justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                    <Zap className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-semibold text-white">RBI Account Aggregator</h3>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono border border-emerald-500/40">
-                        Live Consent Flow
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400">End-to-End Encrypted Open Banking Stream</p>
-                  </div>
+      </main>
+
+      {/* ======================================================== */}
+      {/* INTERACTIVE MODALS */}
+      {/* ======================================================== */}
+
+      {/* 1. Scan & Pay Modal */}
+      <ScanPayModal
+        isOpen={isScanOpen}
+        onClose={() => setIsScanOpen(false)}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
+
+      {/* 2. Send Money Modal */}
+      <SendMoneyModal
+        isOpen={isSendOpen}
+        onClose={() => setIsSendOpen(false)}
+        onSendSuccess={handleSendSuccess}
+      />
+
+      {/* 3. Bank Statement PDF Parser Modal (with Password Decryption) */}
+      <StatementUploadModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        onImportTransactions={handleImportedTransactions}
+      />
+
+      {/* 4. My QR Modal */}
+      <MyQrModal
+        isOpen={isQrOpen}
+        onClose={() => setIsQrOpen(false)}
+      />
+
+      {/* 5. Live Phone UPI Payment Simulator Modal */}
+      {isPhoneSimOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white border border-orange-200 rounded-[32px] max-w-sm w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-2xl bg-orange-50 text-orange-600">
+                  <Smartphone className="w-5 h-5" />
                 </div>
-                <button
-                  onClick={() => setIsAAModalOpen(false)}
-                  className="text-slate-400 hover:text-white text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 transition"
-                >
-                  ✕
-                </button>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Live UPI Phone Sim</h3>
+                  <p className="text-[11px] text-slate-400">Simulate paying via phone app</p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsPhoneSimOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-xs px-2.5 py-1 rounded-lg bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-              {/* Step 1: Mobile Number Input */}
-              {aaStep === 'MOBILE' && (
-                <form onSubmit={handleAASubmitMobile} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                      Enter Mobile Number Linked to Bank Accounts
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-2.5 text-xs text-slate-500 font-mono">+91</span>
-                      <input
-                        type="tel"
-                        maxLength={10}
-                        value={aaMobile}
-                        onChange={e => setAaMobile(e.target.value)}
-                        required
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl pl-12 pr-3.5 py-2.5 text-sm text-white focus:outline-none font-mono tracking-wider"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                    <div className="font-semibold text-slate-300">How it works:</div>
-                    <p>An OTP will be sent by RBI-licensed Account Aggregator (e.g. Setu / Anumati). No bank passwords or net banking logins are ever required.</p>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition"
-                  >
-                    Request Consent OTP
-                  </button>
-                </form>
-              )}
-
-              {/* Step 2: OTP Verification */}
-              {aaStep === 'OTP' && (
-                <form onSubmit={handleAASubmitOtp} className="space-y-4">
-                  <div>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <label className="text-xs font-medium text-slate-300">Enter 4-Digit OTP</label>
-                      <span className="text-[11px] text-slate-500">Sent to +91 {aaMobile}</span>
-                    </div>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="e.g. 1234 or 123456"
-                      value={aaOtp}
-                      onChange={e => setAaOtp(e.target.value)}
-                      autoFocus
-                      required
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-center text-lg text-white focus:outline-none font-mono tracking-widest"
-                    />
-                    <p className="text-[10px] text-slate-500 text-center mt-1">Hint: Enter any 4 numbers (e.g. 1234) for live sandbox authorization.</p>
-                  </div>
-
-                  <div className="flex gap-2">
+            <form onSubmit={handleLivePaymentSim} className="space-y-3.5">
+              {/* App Selector */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Select UPI App</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['Google Pay', 'PhonePe', 'Paytm', 'CRED'] as const).map(app => (
                     <button
                       type="button"
-                      onClick={() => setAaStep('MOBILE')}
-                      className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl transition"
+                      key={app}
+                      onClick={() => setSimApp(app)}
+                      className={`py-1.5 px-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                        simApp === app 
+                          ? 'bg-orange-500 border-orange-500 text-white shadow-xs' 
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
                     >
-                      Back
+                      {app}
                     </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition"
-                    >
-                      Verify OTP
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Step 3: Select Bank Accounts to Link */}
-              {aaStep === 'SELECT_ACCOUNTS' && (
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-xs font-semibold text-white mb-1">Select Accounts to Share with Happy Pocket</h4>
-                    <p className="text-[11px] text-slate-400">Discovered 2 accounts registered with your phone number:</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    {[
-                      { id: 'sbi_40665', name: 'State Bank of India', mask: '•••• 40665', type: 'Savings A/C (Salary)' },
-                      { id: 'canara_91636', name: 'Canara Bank', mask: '•••• 91636', type: 'Savings A/C (Personal)' }
-                    ].map(acc => {
-                      const isSelected = selectedAABanks.includes(acc.id);
-                      return (
-                        <div
-                          key={acc.id}
-                          onClick={() => {
-                            setSelectedAABanks(prev => 
-                              prev.includes(acc.id) ? prev.filter(x => x !== acc.id) : [...prev, acc.id]
-                            );
-                          }}
-                          className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between ${
-                            isSelected 
-                              ? 'border-emerald-500/80 bg-emerald-950/20' 
-                              : 'border-slate-800 bg-slate-950/60'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-slate-800 text-slate-300">
-                              <Building className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <div className="text-xs font-semibold text-white">{acc.name}</div>
-                              <div className="text-[10px] text-slate-400 font-mono">{acc.mask} · {acc.type}</div>
-                            </div>
-                          </div>
-                          <CheckCircle2 className={`w-4 h-4 ${isSelected ? 'text-emerald-400' : 'text-slate-600'}`} />
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-[10px] text-slate-500 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Consent is periodic, read-only, and can be revoked anytime.</span>
-                  </div>
-
-                  <button
-                    onClick={handleAAAuthorize}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2"
-                  >
-                    Authorize & Fetch Transactions
-                  </button>
+                  ))}
                 </div>
-              )}
-
-              {/* Step 4: Fetching animation */}
-              {aaStep === 'FETCHING' && (
-                <div className="py-8 text-center space-y-3">
-                  <RefreshCw className="w-8 h-8 animate-spin text-emerald-400 mx-auto" />
-                  <div className="text-sm font-semibold text-white">Pulling Encrypted Bank Packets...</div>
-                  <p className="text-xs text-slate-400">Verifying digital signatures via Setu AA Gateway and decrypting FIP payload.</p>
-                </div>
-              )}
-
-              {/* Step 5: Success confirmation */}
-              {aaStep === 'SUCCESS' && (
-                <div className="py-8 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <div className="text-sm font-semibold text-white">Accounts Linked Successfully!</div>
-                  <p className="text-xs text-emerald-400 font-mono">Streamed 144 transactions directly into engine.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Live Phone UPI Payment Simulator Modal */}
-        {isPhoneSimOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-cyan-500/40 rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-2xl shadow-cyan-500/10 animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-start justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                    <Smartphone className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-white">Live UPI Payment Sim</h3>
-                    <p className="text-xs text-slate-400">Simulate paying via GPay/PhonePe</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsPhoneSimOpen(false)}
-                  className="text-slate-400 hover:text-white text-xs px-2.5 py-1 rounded-lg bg-slate-800"
-                >
-                  ✕
-                </button>
               </div>
 
-              <form onSubmit={handleLivePayment} className="space-y-4">
-                {/* App Selector */}
+              {/* Quick Merchant Shortcuts */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Quick Payees</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { name: 'Swiggy', defaultAmt: '380' },
+                    { name: 'Zomato', defaultAmt: '450' },
+                    { name: 'Blinkit', defaultAmt: '290' },
+                    { name: 'Indian Oil', defaultAmt: '650' },
+                    { name: 'Uber Cab', defaultAmt: '210' },
+                    { name: 'Netflix', defaultAmt: '649' }
+                  ].map(m => (
+                    <button
+                      type="button"
+                      key={m.name}
+                      onClick={() => {
+                        setSimPayee(m.name);
+                        setSimAmount(m.defaultAmt);
+                      }}
+                      className={`px-2 py-1 text-[11px] rounded-lg border font-medium transition cursor-pointer ${
+                        simPayee === m.name 
+                          ? 'bg-orange-100 border-orange-300 text-orange-800 font-bold' 
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Payee Name */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Merchant / Payee Name</label>
+                <input
+                  type="text"
+                  value={simPayee}
+                  onChange={e => setSimPayee(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Amount (₹)</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={simAmount}
+                  onChange={e => setSimAmount(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-base font-bold font-mono text-slate-900 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-orange-50 text-[10px] text-orange-800 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <span>Simulates phone payment, webhook delivery & auto ledger update.</span>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Pay ₹{simAmount} & Stream to App
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. RBI Account Aggregator (AA) Consent Flow Simulator Modal */}
+      {isAAModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-100 rounded-[32px] max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-600">
+                  <Zap className="w-5 h-5" />
+                </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Payment App</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['Google Pay', 'PhonePe', 'Paytm', 'CRED'] as const).map(app => (
-                      <button
-                        type="button"
-                        key={app}
-                        onClick={() => setSimApp(app)}
-                        className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
-                          simApp === app 
-                            ? 'bg-cyan-950/60 border-cyan-500 text-cyan-300' 
-                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {app}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-slate-900">RBI Account Aggregator</h3>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                      Live Flow
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">Encrypted Open Banking Stream</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAAModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-xs px-2.5 py-1 rounded-lg bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Step 1: Mobile Input */}
+            {aaStep === 'MOBILE' && (
+              <form onSubmit={handleAASubmitMobile} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Mobile Number Linked to Bank Accounts
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-mono">+91</span>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={aaMobile}
+                      onChange={e => setAaMobile(e.target.value)}
+                      required
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-500"
+                    />
                   </div>
                 </div>
 
-                {/* Quick Merchant Buttons */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Quick Merchants</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { name: 'Swiggy', defaultAmt: '380' },
-                      { name: 'Zomato', defaultAmt: '420' },
-                      { name: 'Blinkit', defaultAmt: '290' },
-                      { name: 'Indian Oil Fuel', defaultAmt: '500' },
-                      { name: 'Uber Cab', defaultAmt: '210' },
-                      { name: 'Netflix India', defaultAmt: '199' }
-                    ].map(m => (
-                      <button
-                        type="button"
-                        key={m.name}
-                        onClick={() => {
-                          setSimPayee(m.name);
-                          setSimAmount(m.defaultAmt);
-                        }}
-                        className={`px-2.5 py-1 text-[11px] rounded-lg border transition ${
-                          simPayee === m.name 
-                            ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300' 
-                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Custom Payee */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Payee Name / Merchant</label>
-                  <input
-                    type="text"
-                    value={simPayee}
-                    onChange={e => setSimPayee(e.target.value)}
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none"
-                  />
-                </div>
-
-                {/* Amount */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Amount (₹)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    value={simAmount}
-                    onChange={e => setSimAmount(e.target.value)}
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-lg font-bold font-mono text-emerald-400 focus:outline-none"
-                  />
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-500 flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <span>Submitting fires a live webhook simulating real-time bank debit & instant ledger updates.</span>
+                <div className="p-3 rounded-xl bg-slate-50 text-[11px] text-slate-600">
+                  An OTP will be sent by RBI-licensed Account Aggregator (Setu / Sahamati). No bank login passwords needed.
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-600/30 transition flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  Pay ₹{simAmount} & Stream to App
+                  Request Consent OTP
                 </button>
               </form>
-            </div>
+            )}
+
+            {/* Step 2: OTP Verification */}
+            {aaStep === 'OTP' && (
+              <form onSubmit={handleAASubmitOtp} className="space-y-3.5">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-xs font-bold text-slate-700">Enter OTP</label>
+                    <span className="text-[10px] text-slate-500">Sent to +91 {aaMobile}</span>
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="1234"
+                    value={aaOtp}
+                    onChange={e => setAaOtp(e.target.value)}
+                    autoFocus
+                    required
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 text-center text-lg font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-500 tracking-widest"
+                  />
+                  <p className="text-[10px] text-slate-500 text-center mt-1">Hint: Enter 1234 for sandbox authorization.</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAaStep('MOBILE')}
+                    className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 transition cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer"
+                  >
+                    Verify OTP
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Step 3: Select Bank Accounts */}
+            {aaStep === 'SELECT_ACCOUNTS' && (
+              <div className="space-y-3.5">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 mb-0.5">Select Accounts to Link</h4>
+                  <p className="text-[11px] text-slate-500">Discovered registered accounts with your phone number:</p>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    { id: 'sbi_40665', name: 'State Bank of India', mask: '•••• 40665', type: 'Savings Account (Primary)' },
+                    { id: 'canara_91636', name: 'Canara Bank', mask: '•••• 91636', type: 'Savings Account (Secondary)' }
+                  ].map(acc => {
+                    const isSelected = selectedAABanks.includes(acc.id);
+                    return (
+                      <div
+                        key={acc.id}
+                        onClick={() => {
+                          setSelectedAABanks(prev => 
+                            prev.includes(acc.id) ? prev.filter(x => x !== acc.id) : [...prev, acc.id]
+                          );
+                        }}
+                        className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+                          isSelected 
+                            ? 'border-emerald-500 bg-emerald-50/50' 
+                            : 'border-slate-200 bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700">
+                            <Building className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">{acc.name}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">{acc.mask} · {acc.type}</div>
+                          </div>
+                        </div>
+                        <CheckCircle2 className={`w-4 h-4 ${isSelected ? 'text-emerald-600' : 'text-slate-300'}`} />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAAAuthorize}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer"
+                >
+                  Authorize & Fetch Transactions
+                </button>
+              </div>
+            )}
+
+            {/* Step 4: Fetching */}
+            {aaStep === 'FETCHING' && (
+              <div className="py-8 text-center space-y-2">
+                <RefreshCw className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                <div className="text-sm font-bold text-slate-900">Pulling Encrypted Bank Packets...</div>
+                <p className="text-xs text-slate-500">Decrypting FIP payload via Setu AA Gateway.</p>
+              </div>
+            )}
+
+            {/* Step 5: Success */}
+            {aaStep === 'SUCCESS' && (
+              <div className="py-8 text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div className="text-sm font-bold text-slate-900">Accounts Linked Successfully!</div>
+                <p className="text-xs text-emerald-700 font-mono">Streamed live records directly into ledger.</p>
+              </div>
+            )}
           </div>
-        )}
-      </main>
+        </div>
+      )}
+
     </div>
   );
 }
