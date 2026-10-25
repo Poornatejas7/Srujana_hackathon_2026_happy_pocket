@@ -2,14 +2,15 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { ShieldCheck, QrCode, Lock, Bell, ChevronRight, HelpCircle, LogOut } from 'lucide-react';
+import { ShieldCheck, QrCode, Lock, Bell, ChevronRight, HelpCircle, LogOut, Trash2 } from 'lucide-react';
 
 interface ProfileTabProps {
   onShowQR: () => void;
   onLogout?: () => void;
+  onClearData?: () => void;
 }
 
-export default function ProfileTab({ onShowQR, onLogout }: ProfileTabProps) {
+export default function ProfileTab({ onShowQR, onLogout, onClearData }: ProfileTabProps) {
   return (
     <div className="space-y-4 animate-fadeIn">
       {/* Profile Card */}
@@ -68,6 +69,29 @@ export default function ProfileTab({ onShowQR, onLogout }: ProfileTabProps) {
             </div>
           );
         })}
+
+        {/* Clear Data Option */}
+        {onClearData && (
+          <div
+            onClick={() => {
+              if (window.confirm('Are you sure you want to clear all transactions and reset data?')) {
+                onClearData();
+              }
+            }}
+            className="flex items-center justify-between p-3 rounded-2xl hover:bg-amber-50/70 transition cursor-pointer text-amber-700 group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 group-hover:bg-amber-100 flex items-center justify-center text-amber-600 transition">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-amber-800">Clear All Transactions</h4>
+                <p className="text-[10px] text-amber-600">Reset MongoDB database and clear ledger</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        )}
 
         {/* Log Out Option */}
         {onLogout && (

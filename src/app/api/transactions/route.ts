@@ -218,11 +218,15 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   const merchant = searchParams.get('merchant');
+  const all = searchParams.get('all') === 'true' || searchParams.get('clearAll') === 'true';
 
   try {
     await connectToDatabase();
 
-    if (id) {
+    if (all) {
+      const res = await TransactionModel.deleteMany({});
+      return NextResponse.json({ success: true, clearedAll: true, deletedCount: res.deletedCount });
+    } else if (id) {
       if (mongoose.isValidObjectId(id)) {
         await TransactionModel.findByIdAndDelete(id);
       } else {
@@ -240,7 +244,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: true, deletedMerchant: merchant, deletedCount: res.deletedCount });
     }
 
-    return NextResponse.json({ success: false, error: 'id or merchant parameter required' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'id, merchant, or all=true parameter required' }, { status: 400 });
   } catch (err: any) {
     console.warn('MongoDB DELETE offline fallback:', err?.message);
     return NextResponse.json({ success: true, isOffline: true, deletedId: id || merchant });

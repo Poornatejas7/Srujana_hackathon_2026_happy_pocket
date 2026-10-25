@@ -50,8 +50,8 @@ import { RawTransaction, Category } from '@/types/finance';
 import { enrichAndAnalyzeTransactions, getCategoryIcon, getCategoryThemeLabel, saveUserMerchantOverride } from '@/lib/engine';
 
 export default function HappyPocketApp() {
-  const [balance, setBalance] = useState<number>(14524.91);
-  const [transactions, setTransactions] = useState<DisplayTransaction[]>(DEFAULT_RECENT_TRANSACTIONS);
+  const [balance, setBalance] = useState<number>(0);
+  const [transactions, setTransactions] = useState<DisplayTransaction[]>([]);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
   const [isDbLoading, setIsDbLoading] = useState<boolean>(false);
@@ -204,9 +204,36 @@ export default function HappyPocketApp() {
         if (converted.length > 0) {
           setTransactions(converted);
         }
+      } else if (data.success && (!data.transactions || data.transactions.length === 0)) {
+        setDbCount(0);
+        setExtractedRawTxs([]);
+        setAnalysisResult(null);
+        setTransactions([]);
       }
     } catch (err) {
       console.error('Error fetching database transactions:', err);
+    } finally {
+      setIsDbLoading(false);
+    }
+  };
+
+  // Clear all transactions from MongoDB Atlas & local state
+  const handleClearAllData = async () => {
+    try {
+      setIsDbLoading(true);
+      const res = await fetch('/api/transactions?all=true', { method: 'DELETE' });
+      const data = await res.json();
+      setDbCount(0);
+      setExtractedRawTxs([]);
+      setAnalysisResult(null);
+      setTransactions([]);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('hp_merchant_category_overrides');
+      }
+      showToast(`🗑️ Cleared ${data?.deletedCount ?? 0} transactions from database`);
+    } catch (err) {
+      console.error('Failed to clear data:', err);
+      showToast('Failed to clear database data');
     } finally {
       setIsDbLoading(false);
     }
@@ -876,6 +903,7 @@ export default function HappyPocketApp() {
                         <ProfileTab 
                           onShowQR={() => setIsQrOpen(true)} 
                           onLogout={handleLogout}
+                          onClearData={handleClearAllData}
                         />
                       </div>
                     )}
