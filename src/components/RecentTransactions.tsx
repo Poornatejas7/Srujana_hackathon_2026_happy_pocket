@@ -24,6 +24,9 @@ export interface DisplayTransaction {
   rawDescription?: string;
   upiRrn?: string;
   remark?: string;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
 }
 
 export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [];
@@ -133,6 +136,14 @@ export default function RecentTransactions({
                       {(tx.needsReview || tx.isAmbiguous || tx.category === 'Other / Unknown') && !tx.userOverridden && (
                         <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 border border-amber-300">
                           ⚠️ Review
+                        </span>
+                      )}
+                      {tx.isUnnecessary && (
+                        <span 
+                          title={tx.unnecessaryReason || 'Avoidable Spend'}
+                          className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 border border-rose-300 flex items-center gap-0.5"
+                        >
+                          <span>🚨 Avoidable</span>
                         </span>
                       )}
                     </div>

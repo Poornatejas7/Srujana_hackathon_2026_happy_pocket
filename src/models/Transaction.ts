@@ -27,6 +27,9 @@ export interface ITransactionDocument extends Document {
   isAmbiguous?: boolean;
   needsReview?: boolean;
   confidenceScore?: number;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +71,14 @@ const TransactionSchema: Schema = new Schema(
     isAmbiguous: { type: Boolean, default: false, index: true },
     needsReview: { type: Boolean, default: false, index: true },
     confidenceScore: { type: Number, default: 85 },
+    isUnnecessary: { type: Boolean, default: false, index: true },
+    unnecessaryReason: { type: String, default: '' },
+    spendNature: { 
+      type: String, 
+      enum: ['Need', 'Want', 'Unnecessary_Leakage'], 
+      default: 'Need',
+      index: true 
+    },
   },
   {
     timestamps: true,

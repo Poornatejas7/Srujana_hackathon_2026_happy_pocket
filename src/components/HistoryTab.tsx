@@ -20,11 +20,12 @@ export default function HistoryTab({
   onEditTransaction 
 }: HistoryTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'unclassified' | 'merchant' | 'personal' | 'outflow' | 'inflow'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'unclassified' | 'unnecessary' | 'merchant' | 'personal' | 'outflow' | 'inflow'>('all');
 
   const unclassifiedCount = transactions.filter(
     t => (t.isAmbiguous || t.needsReview || t.category === 'Other / Unknown') && !t.userOverridden
   ).length;
+  const unnecessaryCount = transactions.filter(t => t.isUnnecessary && t.amount < 0).length;
   const merchantCount = transactions.filter(t => t.accountType === 'Merchant / Business').length;
   const personalCount = transactions.filter(t => t.accountType === 'Personal').length;
 
@@ -37,6 +38,7 @@ export default function HistoryTab({
     
     if (!matchesSearch) return false;
     if (filterType === 'unclassified') return isUnclassified;
+    if (filterType === 'unnecessary') return tx.isUnnecessary && tx.amount < 0;
     if (filterType === 'merchant') return tx.accountType === 'Merchant / Business';
     if (filterType === 'personal') return tx.accountType === 'Personal';
     if (filterType === 'outflow') return tx.amount < 0;
@@ -103,6 +105,7 @@ export default function HistoryTab({
         {[
           { id: 'all', label: `All (${transactions.length})` },
           ...(unclassifiedCount > 0 ? [{ id: 'unclassified', label: `⚠️ Unclassified (${unclassifiedCount})` }] : []),
+          ...(unnecessaryCount > 0 ? [{ id: 'unnecessary', label: `🚨 Unnecessary (${unnecessaryCount})` }] : []),
           { id: 'merchant', label: `Merchants (${merchantCount})` },
           { id: 'personal', label: `Personal P2P (${personalCount})` },
           { id: 'outflow', label: 'Debits (-)' },
@@ -169,6 +172,20 @@ export default function HistoryTab({
                           }`}
                         >
                           {tx.accountType === 'Merchant / Business' ? 'Merchant' : 'Personal'}
+                        </span>
+                      )}
+
+                      {tx.isUnnecessary && (
+                        <span 
+                          title={tx.unnecessaryReason || 'Avoidable Spend'}
+                          className="flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 border border-rose-300 shrink-0"
+                        >
+                          <span>🚨 Avoidable</span>
+                          {tx.unnecessaryReason && (
+                            <span className="font-normal truncate max-w-[110px] hidden sm:inline">
+                              • {tx.unnecessaryReason}
+                            </span>
+                          )}
                         </span>
                       )}
 

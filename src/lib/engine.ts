@@ -37,6 +37,7 @@ export function getCategoryIcon(category: Category): string {
     case 'Internal Transfer': return '🏦';
     case 'Reimbursement / Split': return '🤝';
     case 'Income': return '💰';
+    case 'Unnecessary & Impulse Spend': return '🚨';
     case 'Other / Unknown': return '❓';
     default: return '🏪';
   }
@@ -61,6 +62,7 @@ export function getCategoryThemeLabel(category: Category): string {
     case 'Subscriptions & Digital': return 'Digital & Utility Service';
     case 'Internal Transfer': return 'Self-Transfer (Own A/C)';
     case 'Reimbursement / Split': return 'Friend & Family Transfer';
+    case 'Unnecessary & Impulse Spend': return 'Unnecessary & Impulse Expenditure';
     case 'Income': return 'Salary / Business Inflow';
     case 'Other / Unknown': return 'Unclassified / Review Needed';
     default: return 'Commercial Merchant Store';
@@ -96,6 +98,125 @@ export function saveUserMerchantOverride(
   } catch (err) {
     console.error('Failed to save merchant override:', err);
   }
+}
+
+/**
+ * Real-world Unnecessary / Impulse Expenditure & Financial Leakage Detector
+ * Identifies avoidable spending triggers:
+ * - Impulse Food Delivery & Late-Night Dining (Swiggy, Zomato, Burger King, Domino's, midnight orders)
+ * - Fast Fashion & Impulsive Retail Shopping (Zara, Meesho, Myntra, Shein, H&M)
+ * - Excess / Unused Digital Subscriptions & Gaming micro-transactions
+ * - Tobacco, Paan, Alcohol, Nightlife & Pubs
+ * - Explicit User-flagged avoidable leakage
+ */
+export function detectUnnecessaryExpenditure(tx: {
+  amount: number;
+  category?: Category | string;
+  cleanMerchant?: string;
+  payeeName?: string;
+  rawDescription?: string;
+  timestamp?: string;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
+}): {
+  isUnnecessary: boolean;
+  unnecessaryReason: string;
+  spendNature: 'Need' | 'Want' | 'Unnecessary_Leakage';
+} {
+  // If explicitly flagged by user, respect user determination
+  if (tx.isUnnecessary !== undefined) {
+    return {
+      isUnnecessary: !!tx.isUnnecessary,
+      unnecessaryReason: tx.unnecessaryReason || (tx.isUnnecessary ? 'Marked by User as Avoidable Spend' : ''),
+      spendNature: tx.isUnnecessary ? 'Unnecessary_Leakage' : 'Need',
+    };
+  }
+
+  // If user classified into Unnecessary category
+  if (tx.category === 'Unnecessary & Impulse Spend') {
+    return {
+      isUnnecessary: true,
+      unnecessaryReason: tx.unnecessaryReason || 'Classified as Unnecessary & Impulse Spend',
+      spendNature: 'Unnecessary_Leakage',
+    };
+  }
+
+  // Inflows or zero-value transactions are not unnecessary expenses
+  if (!tx.amount || tx.amount >= 0) {
+    return {
+      isUnnecessary: false,
+      unnecessaryReason: '',
+      spendNature: 'Need',
+    };
+  }
+
+  const text = `${tx.cleanMerchant || ''} ${tx.payeeName || ''} ${tx.rawDescription || ''}`.toUpperCase();
+
+  // 1. Tobacco, Paan, Alcohol, Bars, Breweries & Nightclubs
+  if (
+    /TOBACCO|CIGARETTE|SMOKE|VAPE|PAAN|PAN SHOP|BEER|WINE|LIQUOR|SPIRITS|BREWERY|BREWPUB|BAR\b|PUBS?\b|NIGHTCLUB|CLUB\b|CASINO|LOTTERY/i.test(text)
+  ) {
+    return {
+      isUnnecessary: true,
+      unnecessaryReason: 'Nightlife, Bar or Indulgence Outflow',
+      spendNature: 'Unnecessary_Leakage',
+    };
+  }
+
+  // 2. Late Night Food Delivery & Impulse Dining
+  if (/SWIGGY|ZOMATO|DOMINO|PIZZA|BURGER KING|MCDONALD|KFC|STARBUCKS|SUBWAY|BAKERY|SWEETS|ICE CREAM|CAFE|CHAI POINT/i.test(text)) {
+    let isLateNight = false;
+    if (tx.timestamp) {
+      try {
+        const hour = new Date(tx.timestamp).getHours();
+        if (hour >= 22 || hour <= 4) {
+          isLateNight = true;
+        }
+      } catch {}
+    }
+    return {
+      isUnnecessary: true,
+      unnecessaryReason: isLateNight 
+        ? 'Midnight Food Delivery & Night Craving' 
+        : 'Impulse Food Delivery & Dining Out',
+      spendNature: 'Unnecessary_Leakage',
+    };
+  }
+
+  // 3. Fast Fashion & Impulse Retail Shopping
+  if (/ZARA|H&M|MEESHO|MYNTRA|SHEIN|NYKAA|AJIO|URBANIC/i.test(text)) {
+    return {
+      isUnnecessary: true,
+      unnecessaryReason: 'Fast Fashion & Discretionary Impulse Buy',
+      spendNature: 'Unnecessary_Leakage',
+    };
+  }
+
+  // 4. Gaming Micro-transactions & In-App Purchases
+  if (/STEAM|PLAYSTATION|XBOX|BGMI|PUBG|VALORANT|DISCORD NITRO|SUPERCELL|RIOT/i.test(text)) {
+    return {
+      isUnnecessary: true,
+      unnecessaryReason: 'Gaming & Virtual Currency Micro-transactions',
+      spendNature: 'Unnecessary_Leakage',
+    };
+  }
+
+  // 5. OTT Entertainment Streaming Subscriptions (when discretionary)
+  if (tx.category === 'Subscriptions & Digital' && /NETFLIX|PRIME|HOTSTAR|SPOTIFY/i.test(text)) {
+    return {
+      isUnnecessary: true,
+      unnecessaryReason: 'Non-Essential Entertainment Streaming Subscription',
+      spendNature: 'Want',
+    };
+  }
+
+  // Otherwise, default according to category
+  const isWant = ['Shopping & Discretionary', 'Dining & Nightlife', 'Entertainment', 'Personal Care'].includes(tx.category as string);
+  return {
+    isUnnecessary: false,
+    unnecessaryReason: '',
+    spendNature: isWant ? 'Want' : 'Need',
+  };
 }
 
 export interface SimulatedAccount {
@@ -840,6 +961,11 @@ export function enrichAndAnalyzeTransactions(
     zombieSubscriptionsTotal: number;
     merchantCount: number;
     personalCount: number;
+    unnecessaryExpenditureTotal: number;
+    unnecessaryExpenditureCount: number;
+    unnecessaryPercentage: number;
+    unnecessarySIPProjection5Yr: number;
+    unnecessarySIPProjection10Yr: number;
   };
 } {
   // Step 1: Process each transaction with UPI engine and classify Merchant vs Personal
@@ -864,6 +990,17 @@ export function enrichAndAnalyzeTransactions(
     const isAmbiguous = userOverridden ? false : (tx.isAmbiguous !== undefined ? tx.isAmbiguous : info.isAmbiguous);
     const needsReview = userOverridden ? false : (tx.needsReview !== undefined ? tx.needsReview : info.needsReview);
 
+    const unnecessaryDetection = detectUnnecessaryExpenditure({
+      amount: tx.amount,
+      category,
+      cleanMerchant: tx.payeeName || info.cleanName,
+      payeeName: tx.payeeName,
+      rawDescription: tx.rawDescription,
+      timestamp: tx.timestamp,
+      isUnnecessary: tx.isUnnecessary,
+      unnecessaryReason: tx.unnecessaryReason,
+    });
+
     return {
       ...tx,
       cleanMerchant: tx.payeeName || info.cleanName,
@@ -881,6 +1018,9 @@ export function enrichAndAnalyzeTransactions(
       userOverridden,
       isAmbiguous,
       needsReview,
+      isUnnecessary: unnecessaryDetection.isUnnecessary,
+      unnecessaryReason: unnecessaryDetection.unnecessaryReason,
+      spendNature: unnecessaryDetection.spendNature,
     };
   });
 
@@ -967,6 +1107,22 @@ export function enrichAndAnalyzeTransactions(
   const merchantCount = enriched.filter(t => t.accountType === 'Merchant / Business').length;
   const personalCount = enriched.filter(t => t.accountType === 'Personal').length;
 
+  const unnecessaryTxs = enriched.filter(t => t.amount < 0 && t.isUnnecessary && !t.isInternalTransfer);
+  const unnecessaryExpenditureTotal = unnecessaryTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const unnecessaryExpenditureCount = unnecessaryTxs.length;
+  const unnecessaryPercentage = trueLivingExpenses > 0 
+    ? Math.round((unnecessaryExpenditureTotal / trueLivingExpenses) * 100) 
+    : 0;
+
+  // 14.5% AMFI Historical Index CAGR Compounded Monthly SIP formula
+  const monthlyRate = 0.145 / 12;
+  const unnecessarySIPProjection5Yr = unnecessaryExpenditureTotal > 0
+    ? Math.round(unnecessaryExpenditureTotal * ((Math.pow(1 + monthlyRate, 60) - 1) / monthlyRate) * (1 + monthlyRate))
+    : 0;
+  const unnecessarySIPProjection10Yr = unnecessaryExpenditureTotal > 0
+    ? Math.round(unnecessaryExpenditureTotal * ((Math.pow(1 + monthlyRate, 120) - 1) / monthlyRate) * (1 + monthlyRate))
+    : 0;
+
   return {
     enriched,
     subscriptions,
@@ -979,7 +1135,12 @@ export function enrichAndAnalyzeTransactions(
       monthlyRecurringCommitments,
       zombieSubscriptionsTotal: 0,
       merchantCount,
-      personalCount
+      personalCount,
+      unnecessaryExpenditureTotal,
+      unnecessaryExpenditureCount,
+      unnecessaryPercentage,
+      unnecessarySIPProjection5Yr,
+      unnecessarySIPProjection10Yr,
     }
   };
 }

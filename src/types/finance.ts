@@ -27,6 +27,7 @@ export type Category =
   | 'Personal Care'
   | 'Internal Transfer'
   | 'Reimbursement / Split'
+  | 'Unnecessary & Impulse Spend'
   | 'Income'
   | 'Other / Unknown';
 
@@ -58,6 +59,9 @@ export interface RawTransaction {
   needsReview?: boolean;     // Needs user category confirmation
   confidenceScore?: number;  // 0-100
   userOverridden?: boolean;  // True if user customized the category
+  isUnnecessary?: boolean;   // Avoidable / Impulse expenditure flag
+  unnecessaryReason?: string; // Reason e.g. "Impulse Food Delivery", "Fast Fashion", "Unused OTT"
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
 }
 
 export interface EnrichedTransaction extends RawTransaction {
@@ -80,6 +84,9 @@ export interface EnrichedTransaction extends RawTransaction {
   userOverridden?: boolean;
   isAmbiguous?: boolean;
   needsReview?: boolean;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
 }
 
 export interface SubscriptionItem {

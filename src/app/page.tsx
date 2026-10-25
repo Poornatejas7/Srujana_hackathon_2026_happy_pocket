@@ -52,7 +52,13 @@ import AndroidDrawer from '@/components/AndroidDrawer';
 import CategoryClassifierModal from '@/components/CategoryClassifierModal';
 import EditTransactionModal from '@/components/EditTransactionModal';
 import { RawTransaction, Category } from '@/types/finance';
-import { enrichAndAnalyzeTransactions, getCategoryIcon, getCategoryThemeLabel, saveUserMerchantOverride } from '@/lib/engine';
+import { 
+  enrichAndAnalyzeTransactions, 
+  getCategoryIcon, 
+  getCategoryThemeLabel, 
+  saveUserMerchantOverride,
+  detectUnnecessaryExpenditure 
+} from '@/lib/engine';
 
 export default function HappyPocketApp() {
   const [balance, setBalance] = useState<number>(10000.00);
@@ -202,6 +208,9 @@ export default function HappyPocketApp() {
           confidenceScore: t.confidenceScore || 85,
           userOverridden: t.userOverridden || false,
           category: t.category,
+          isUnnecessary: t.isUnnecessary !== undefined ? t.isUnnecessary : undefined,
+          unnecessaryReason: t.unnecessaryReason,
+          spendNature: t.spendNature,
         }));
 
         setExtractedRawTxs(rawList);
@@ -233,6 +242,9 @@ export default function HappyPocketApp() {
           rawDescription: item.rawDescription,
           upiRrn: item.upiRrn,
           remark: (item as any).remark,
+          isUnnecessary: item.isUnnecessary,
+          unnecessaryReason: item.unnecessaryReason,
+          spendNature: item.spendNature,
         }));
 
         if (converted.length > 0) {
@@ -330,6 +342,17 @@ export default function HappyPocketApp() {
     const cat = txDoc?.category || 'Shopping & Discretionary';
     const txType = cat === 'Groceries' ? 'grocery' : cat === 'Transport & Fuel' ? 'fuel' : 'other';
 
+    const unnecessaryInfo = detectUnnecessaryExpenditure({
+      amount: -amount,
+      category: cat,
+      cleanMerchant: merchant,
+      payeeName: merchant,
+      rawDescription: txDoc?.rawDescription || `UPI/DR/${merchant}/PAYMENT`,
+      timestamp: txDoc?.timestamp || new Date().toISOString(),
+      isUnnecessary: txDoc?.isUnnecessary,
+      unnecessaryReason: txDoc?.unnecessaryReason,
+    });
+
     const newTx: DisplayTransaction = {
       id: txDoc?._id || txDoc?.id || `tx_${Date.now()}`,
       title: txDoc?.cleanMerchant || merchant,
@@ -343,6 +366,9 @@ export default function HappyPocketApp() {
       vpaHandle: txDoc?.vpaHandle,
       payeeName: txDoc?.payeeName || merchant,
       category: cat,
+      isUnnecessary: unnecessaryInfo.isUnnecessary,
+      unnecessaryReason: unnecessaryInfo.unnecessaryReason,
+      spendNature: unnecessaryInfo.spendNature,
     };
     setTransactions((prev) => [newTx, ...prev]);
 
@@ -363,6 +389,9 @@ export default function HappyPocketApp() {
       isInternalTransfer: false,
       isReimbursementOffset: false,
       isRecurringAutoPay: false,
+      isUnnecessary: unnecessaryInfo.isUnnecessary,
+      unnecessaryReason: unnecessaryInfo.unnecessaryReason,
+      spendNature: unnecessaryInfo.spendNature,
     };
     setExtractedRawTxs((prev) => {
       const updated = [rawEntry, ...prev];
@@ -549,6 +578,8 @@ export default function HappyPocketApp() {
     themeIcon: string;
     remark?: string;
     rememberForFuture: boolean;
+    isUnnecessary?: boolean;
+    unnecessaryReason?: string;
   }) => {
     // 1. Remember future rule if checked
     if (updatedData.rememberForFuture && updatedData.title) {
@@ -573,6 +604,9 @@ export default function HappyPocketApp() {
           needsReview: false,
           confidenceScore: 100,
           userOverridden: true,
+          isUnnecessary: updatedData.isUnnecessary || false,
+          unnecessaryReason: updatedData.unnecessaryReason || '',
+          spendNature: updatedData.isUnnecessary ? 'Unnecessary_Leakage' : 'Need',
         }),
       });
     } catch (err) {
@@ -595,13 +629,16 @@ export default function HappyPocketApp() {
         needsReview: false,
         confidenceScore: 100,
         userOverridden: true,
+        isUnnecessary: updatedData.isUnnecessary || false,
+        unnecessaryReason: updatedData.unnecessaryReason || '',
+        spendNature: (updatedData.isUnnecessary ? 'Unnecessary_Leakage' : 'Need') as 'Need' | 'Want' | 'Unnecessary_Leakage',
         type: t.amount > 0 ? 'salary' : (updatedData.category === 'Groceries' ? 'grocery' : updatedData.category === 'Transport & Fuel' ? 'fuel' : updatedData.accountType === 'Personal' ? 'transfer' : 'other'),
       };
     }));
 
     // 4. Update raw transactions state & re-run financial intelligence engine
     setExtractedRawTxs(prev => {
-      const updated = prev.map(t => {
+      const updated: RawTransaction[] = prev.map(t => {
         if (t.id !== updatedData.id) return t;
         return {
           ...t,
@@ -615,6 +652,9 @@ export default function HappyPocketApp() {
           needsReview: false,
           confidenceScore: 100,
           userOverridden: true,
+          isUnnecessary: updatedData.isUnnecessary || false,
+          unnecessaryReason: updatedData.unnecessaryReason || '',
+          spendNature: (updatedData.isUnnecessary ? 'Unnecessary_Leakage' : 'Need') as 'Need' | 'Want' | 'Unnecessary_Leakage',
         };
       });
       const analyzed = enrichAndAnalyzeTransactions(updated);
@@ -624,7 +664,8 @@ export default function HappyPocketApp() {
 
     setIsEditModalOpen(false);
     setEditingTransaction(null);
-    showToast(`Updated "${updatedData.title}" to [${updatedData.themeIcon} ${updatedData.category}]!`);
+    const unnecMsg = updatedData.isUnnecessary ? ' • Tagged as Unnecessary Leakage 🚨' : '';
+    showToast(`Updated "${updatedData.title}" to [${updatedData.themeIcon} ${updatedData.category}]${unnecMsg}!`);
   };
 
   // Delete transaction from MongoDB Atlas and local state

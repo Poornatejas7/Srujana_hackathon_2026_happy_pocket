@@ -37,6 +37,8 @@ interface EditTransactionModalProps {
     themeIcon: string;
     remark?: string;
     rememberForFuture: boolean;
+    isUnnecessary?: boolean;
+    unnecessaryReason?: string;
   }) => Promise<void> | void;
   onDelete?: (id: string) => Promise<void> | void;
 }
@@ -68,6 +70,7 @@ const ALL_CATEGORIES: CategoryOption[] = [
   { id: 'Subscriptions & Digital', label: 'Subscriptions', icon: '📱', color: 'text-blue-400 bg-blue-500/10', border: 'border-blue-500/40', desc: 'OTT, Netflix, Spotify, mobile recharge & cloud' },
   { id: 'Internal Transfer', label: 'Self Transfer', icon: '🏦', color: 'text-slate-300 bg-slate-500/10', border: 'border-slate-500/40', desc: 'Transfer between your own bank accounts' },
   { id: 'Reimbursement / Split', label: 'P2P / Family Split', icon: '🤝', color: 'text-teal-300 bg-teal-500/10', border: 'border-teal-500/40', desc: 'Friend reimbursement, bill split & family money' },
+  { id: 'Unnecessary & Impulse Spend', label: 'Unnecessary / Impulse', icon: '🚨', color: 'text-rose-400 bg-rose-500/10', border: 'border-rose-500/40', desc: 'Avoidable impulse purchases, wasteful leakage & indulgences' },
   { id: 'Other / Unknown', label: 'Other / Unknown', icon: '❓', color: 'text-slate-400 bg-slate-800', border: 'border-slate-700', desc: 'Unclassified entity pending category review' },
 ];
 
@@ -83,6 +86,8 @@ export default function EditTransactionModal({
   const [accountType, setAccountType] = useState<'Merchant / Business' | 'Personal'>('Merchant / Business');
   const [customNote, setCustomNote] = useState('');
   const [rememberForFuture, setRememberForFuture] = useState(true);
+  const [isUnnecessary, setIsUnnecessary] = useState(false);
+  const [unnecessaryReason, setUnnecessaryReason] = useState('Impulse Food Delivery & Dining Out');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -92,6 +97,8 @@ export default function EditTransactionModal({
       setCategory((transaction.category as Category) || 'Shopping & Discretionary');
       setAccountType(transaction.accountType || (transaction.isInternalTransfer ? 'Personal' : 'Merchant / Business'));
       setCustomNote(transaction.remark || transaction.theme || '');
+      setIsUnnecessary(!!transaction.isUnnecessary || transaction.category === 'Unnecessary & Impulse Spend');
+      setUnnecessaryReason(transaction.unnecessaryReason || 'Impulse Food Delivery & Dining Out');
       setRememberForFuture(true);
     }
   }, [transaction]);
@@ -117,6 +124,8 @@ export default function EditTransactionModal({
         themeIcon: newIcon,
         remark: customNote.trim(),
         rememberForFuture,
+        isUnnecessary,
+        unnecessaryReason: isUnnecessary ? (unnecessaryReason.trim() || 'Avoidable / Impulse Spend') : '',
       });
       onClose();
     } finally {
@@ -293,6 +302,9 @@ export default function EditTransactionModal({
                       if (cat.id === 'Internal Transfer' || cat.id === 'Reimbursement / Split') {
                         setAccountType('Personal');
                       }
+                      if (cat.id === 'Unnecessary & Impulse Spend') {
+                        setIsUnnecessary(true);
+                      }
                     }}
                     className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
                       isSelected
@@ -322,6 +334,84 @@ export default function EditTransactionModal({
               placeholder="e.g. Groceries & Kirana Store, Dinner split, Office monitor..."
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 font-medium"
             />
+          </div>
+
+          {/* Field 4.5: Unnecessary Expenditure / Avoidable Leakage Toggle & Reason */}
+          <div className={`p-3.5 rounded-2xl border transition-all ${
+            isUnnecessary 
+              ? 'bg-rose-950/40 border-rose-500/50 text-rose-100 shadow-sm' 
+              : 'bg-slate-800/60 border-slate-700/70 text-slate-300'
+          }`}>
+            <div 
+              onClick={() => {
+                const nextVal = !isUnnecessary;
+                setIsUnnecessary(nextVal);
+              }}
+              className="flex items-center justify-between cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className={`p-1.5 rounded-xl ${isUnnecessary ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-700/50 text-slate-400'}`}>
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>Mark as Unnecessary / Avoidable Spend</span>
+                    {isUnnecessary && (
+                      <span className="text-[9px] bg-rose-500 text-white font-extrabold px-1.5 py-0.2 rounded">
+                        Leakage
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    Track this expense in the Unnecessary Leakage Tracker &amp; SIP Calculator
+                  </span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={isUnnecessary}
+                onChange={() => {}}
+                className="w-4 h-4 rounded text-rose-500 focus:ring-rose-400 bg-slate-900 border-slate-700 cursor-pointer"
+              />
+            </div>
+
+            {/* Quick Reason Chips and Input if Marked Unnecessary */}
+            {isUnnecessary && (
+              <div className="mt-3 pt-2.5 border-t border-rose-500/20 space-y-2 animate-fadeIn">
+                <label className="text-[10px] font-bold text-rose-300 block uppercase tracking-wider">
+                  Select Avoidable Trigger / Reason:
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    '🍔 Impulse Food / Swiggy',
+                    '🛍️ Fast Fashion / Impulse Buy',
+                    '🎬 Unused / Duplicate OTT',
+                    '🍸 Nightlife & Indulgence',
+                    '⚠️ Wasteful Habit Leakage'
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setUnnecessaryReason(preset)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition cursor-pointer ${
+                        unnecessaryReason === preset
+                          ? 'bg-rose-500 text-white border-rose-400'
+                          : 'bg-slate-900/80 text-rose-200 border-rose-500/30 hover:bg-rose-950'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={unnecessaryReason}
+                  onChange={(e) => setUnnecessaryReason(e.target.value)}
+                  placeholder="Or enter custom reason (e.g. late night craving, impulse sale...)"
+                  className="w-full mt-1 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-rose-500/30 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-400 font-medium"
+                />
+              </div>
+            )}
           </div>
 
           {/* Field 5: Remember for future */}

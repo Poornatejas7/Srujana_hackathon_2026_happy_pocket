@@ -59,6 +59,8 @@ interface TransferItem {
   rrn?: string;
   remark?: string;
   rawDescription?: string;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
 }
 
 interface RecipientAccountSummary {
@@ -73,6 +75,7 @@ interface RecipientAccountSummary {
   maxAmount: number;
   avgAmount: number;
   hasVaryingAmounts: boolean;
+  hasUnnecessary: boolean;
   transfers: TransferItem[]; // List of particular transfers with their exact amounts
 }
 
@@ -165,6 +168,12 @@ const CATEGORY_STYLE_MAP: Record<string, {
     iconBg: 'bg-[#64748B]',
     barColor: 'bg-[#64748B]',
     donutColor: '#64748B',
+  },
+  'Unnecessary & Impulse Spend': {
+    icon: AlertTriangle,
+    iconBg: 'bg-[#F43F5E]',
+    barColor: 'bg-[#F43F5E]',
+    donutColor: '#F43F5E',
   },
   'Others': {
     icon: MoreHorizontal,
@@ -278,7 +287,7 @@ export default function ExpenseTrackerTab({
 }: ExpenseTrackerTabProps) {
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [expandedMerchantName, setExpandedMerchantName] = useState<string | null>(null);
-  const [viewFilter, setViewFilter] = useState<'all' | 'merchants' | 'personal'>('all');
+  const [viewFilter, setViewFilter] = useState<'all' | 'merchants' | 'personal' | 'unnecessary'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllRecipientsView, setShowAllRecipientsView] = useState(false);
   const [activeAnalysisCard, setActiveAnalysisCard] = useState<'velocity' | 'distortion' | 'leakage'>('velocity');
@@ -346,16 +355,34 @@ export default function ExpenseTrackerTab({
       .reduce((acc, t) => acc + Math.abs(t.amount), 0);
     const recoverableLeakage = Math.round(swiggyZaraOrders * 0.45); // 45% impulse portion can be saved
 
-    // 5. Compounded SIP Growth from Recoverable Leakage (at 14.5% AMFI historical Index return)
-    // Formula: P * [ (1 + r)^n - 1 ] * (1 + r) / r
+    // 5. Explicit Unnecessary & Impulse Expenditure Tracking
+    const unnecessaryTransactions = debitTransactions.filter(t => t.isUnnecessary || t.category === 'Unnecessary & Impulse Spend');
+    const unnecessarySpend = unnecessaryTransactions.reduce((acc, t) => acc + Math.abs(t.amount), 0);
+    const unnecessaryCount = unnecessaryTransactions.length;
+    const unnecessaryPercent = trueLivingExpenses > 0 ? Math.round((unnecessarySpend / trueLivingExpenses) * 100) : 0;
+    
+    // Categorize unnecessary triggers for rich breakdown
+    const foodDeliveryUnnecessary = unnecessaryTransactions
+      .filter(t => /SWIGGY|ZOMATO|FOOD|DINING|BURGER|PIZZA|CAFE/i.test(t.title) || t.unnecessaryReason?.toLowerCase().includes('food'))
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+    const fastFashionUnnecessary = unnecessaryTransactions
+      .filter(t => /ZARA|MEESHO|MYNTRA|H&M|CLOTH|FASHION/i.test(t.title) || t.unnecessaryReason?.toLowerCase().includes('fashion'))
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+    const subscriptionUnnecessary = unnecessaryTransactions
+      .filter(t => t.category === 'Subscriptions & Digital' || t.unnecessaryReason?.toLowerCase().includes('subscription'))
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+    const indulgenceUnnecessary = Math.max(0, unnecessarySpend - foodDeliveryUnnecessary - fastFashionUnnecessary - subscriptionUnnecessary);
+
+    // 6. Compounded SIP Growth from Unnecessary Spend (at 14.5% AMFI historical Index return)
     const monthlyRate = 0.145 / 12;
     const sipMonths5Yr = 60;
     const sipMonths10Yr = 120;
-    const sipFutureValue5Yr = recoverableLeakage > 0 
-      ? Math.round(recoverableLeakage * ((Math.pow(1 + monthlyRate, sipMonths5Yr) - 1) / monthlyRate) * (1 + monthlyRate))
+    const targetLeakage = unnecessarySpend > 0 ? unnecessarySpend : recoverableLeakage;
+    const sipFutureValue5Yr = targetLeakage > 0 
+      ? Math.round(targetLeakage * ((Math.pow(1 + monthlyRate, sipMonths5Yr) - 1) / monthlyRate) * (1 + monthlyRate))
       : 0;
-    const sipFutureValue10Yr = recoverableLeakage > 0 
-      ? Math.round(recoverableLeakage * ((Math.pow(1 + monthlyRate, sipMonths10Yr) - 1) / monthlyRate) * (1 + monthlyRate))
+    const sipFutureValue10Yr = targetLeakage > 0 
+      ? Math.round(targetLeakage * ((Math.pow(1 + monthlyRate, sipMonths10Yr) - 1) / monthlyRate) * (1 + monthlyRate))
       : 0;
 
     return {
@@ -372,6 +399,13 @@ export default function ExpenseTrackerTab({
       discretionaryPercent,
       essentialPercent,
       recoverableLeakage,
+      unnecessarySpend,
+      unnecessaryCount,
+      unnecessaryPercent,
+      foodDeliveryUnnecessary,
+      fastFashionUnnecessary,
+      subscriptionUnnecessary,
+      indulgenceUnnecessary,
       sipFutureValue5Yr,
       sipFutureValue10Yr,
     };
@@ -392,14 +426,16 @@ export default function ExpenseTrackerTab({
         theme: string;
         themeIcon: string;
         accountType: 'Merchant / Business' | 'Personal';
+        hasUnnecessary: boolean;
         transfers: TransferItem[];
       }>;
     }>();
 
     debitTransactions.forEach(t => {
-      // Apply view filter (merchants vs personal)
+      // Apply view filter (merchants vs personal vs unnecessary)
       if (viewFilter === 'merchants' && t.accountType !== 'Merchant / Business') return;
       if (viewFilter === 'personal' && t.accountType !== 'Personal') return;
+      if (viewFilter === 'unnecessary' && !t.isUnnecessary && t.category !== 'Unnecessary & Impulse Spend') return;
 
       const catName = t.category || 'Others';
       const absAmount = Math.abs(t.amount);
@@ -425,12 +461,17 @@ export default function ExpenseTrackerTab({
           theme: t.theme || 'Commercial Expense',
           themeIcon: t.themeIcon || (t.accountType === 'Personal' ? '👤' : '🏪'),
           accountType: t.accountType || 'Merchant / Business',
+          hasUnnecessary: false,
           transfers: [],
         });
       }
 
       const rawMatch = rawLookup.get(t.id) || rawLookup.get((t as any).rawDescription);
       const rec = entry.recipientsMap.get(recipientKey)!;
+      const isUnnec = !!t.isUnnecessary || t.category === 'Unnecessary & Impulse Spend';
+      if (isUnnec) {
+        rec.hasUnnecessary = true;
+      }
 
       // Add particular transfer entry
       rec.transfers.push({
@@ -442,6 +483,8 @@ export default function ExpenseTrackerTab({
         rrn: rawMatch?.upiRrn || (t as any).upiRrn,
         remark: rawMatch?.remark || (t as any).remark || (t as any).rawDescription,
         rawDescription: rawMatch?.rawDescription || (t as any).rawDescription,
+        isUnnecessary: isUnnec,
+        unnecessaryReason: t.unnecessaryReason,
       });
     });
 
@@ -478,6 +521,7 @@ export default function ExpenseTrackerTab({
           maxAmount,
           avgAmount,
           hasVaryingAmounts,
+          hasUnnecessary: r.hasUnnecessary,
           transfers: sortedTransfers,
         };
       }).sort((a, b) => b.totalAmount - a.totalAmount);
@@ -697,6 +741,100 @@ export default function ExpenseTrackerTab({
         <DynamicDonutChart slices={donutSlices} />
       </div>
 
+      {/* 2.5. UNNECESSARY & IMPULSE EXPENDITURE TRACKER WIDGET */}
+      <div className="bg-gradient-to-br from-rose-950/40 via-slate-900 to-rose-950/25 rounded-[28px] p-5 shadow-[0_4px_24px_rgba(244,63,94,0.08)] border border-rose-500/30 space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-xl shrink-0">
+              🚨
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-white tracking-tight">
+                  Unnecessary Expenditure Tracker
+                </h3>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500 text-white">
+                  {realWorldMetrics.unnecessaryPercent}% of Living
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-200/80">
+                Identified avoidable financial leakage &amp; impulse spending
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className="text-[10px] text-rose-300 uppercase font-bold tracking-wider block">
+              Total Leakage
+            </span>
+            <span className="text-base sm:text-lg font-black text-white font-sans">
+              ₹{realWorldMetrics.unnecessarySpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+
+        {/* 4 Trigger Breakdown Pills */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-rose-500/20">
+            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+              <span>🍔 Food Deliveries</span>
+            </span>
+            <span className="text-xs font-bold text-white block mt-0.5 font-sans">
+              ₹{realWorldMetrics.foodDeliveryUnnecessary.toLocaleString('en-IN')}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-rose-500/20">
+            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+              <span>🛍️ Fast Fashion</span>
+            </span>
+            <span className="text-xs font-bold text-white block mt-0.5 font-sans">
+              ₹{realWorldMetrics.fastFashionUnnecessary.toLocaleString('en-IN')}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-rose-500/20">
+            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+              <span>🎬 Redundant OTT</span>
+            </span>
+            <span className="text-xs font-bold text-white block mt-0.5 font-sans">
+              ₹{realWorldMetrics.subscriptionUnnecessary.toLocaleString('en-IN')}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-900/80 border border-rose-500/20">
+            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+              <span>🍸 Other Indulgence</span>
+            </span>
+            <span className="text-xs font-bold text-white block mt-0.5 font-sans">
+              ₹{realWorldMetrics.indulgenceUnnecessary.toLocaleString('en-IN')}
+            </span>
+          </div>
+        </div>
+
+        {/* Compounded SIP Potential Banner */}
+        <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between flex-wrap gap-2 text-xs">
+          <div className="space-y-0.5">
+            <span className="text-[11px] font-extrabold text-rose-300 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Redirect Leakage to Mutual Fund Index SIP (14.5% CAGR)</span>
+            </span>
+            <p className="text-[10px] text-slate-300">
+              5-Year Value: <strong className="text-emerald-400 font-sans">₹{realWorldMetrics.sipFutureValue5Yr.toLocaleString('en-IN')}</strong> • 10-Year Value: <strong className="text-emerald-400 font-sans">₹{realWorldMetrics.sipFutureValue10Yr.toLocaleString('en-IN')}</strong>
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setViewFilter(viewFilter === 'unnecessary' ? 'all' : 'unnecessary')}
+            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
+              viewFilter === 'unnecessary'
+                ? 'bg-rose-500 text-white shadow-xs'
+                : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
+            }`}
+          >
+            <span>{viewFilter === 'unnecessary' ? 'Showing Unnecessary Only ✓' : 'Filter Unnecessary Spends →'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* ======================================================== */}
       {/* 3. REAL-WORLD FINANCIAL INTELLIGENCE CARDS (3 TABS)      */}
       {/* ======================================================== */}
@@ -872,10 +1010,11 @@ export default function ExpenseTrackerTab({
           </div>
         </div>
 
-        {/* Filter Chips: All vs Merchants vs Personal */}
+        {/* Filter Chips: All vs Merchants vs Personal vs Unnecessary */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs">
           {[
             { id: 'all', label: `All Outflows (${totalTimesTransferred} times)` },
+            ...(realWorldMetrics.unnecessaryCount > 0 ? [{ id: 'unnecessary', label: `🚨 Unnecessary Spends (${realWorldMetrics.unnecessaryCount})` }] : []),
             { id: 'merchants', label: 'Merchants & Stores' },
             { id: 'personal', label: 'Personal Transfers' },
           ].map((f) => (
@@ -1021,9 +1160,18 @@ export default function ExpenseTrackerTab({
                                   <span className="font-extrabold font-sans text-sm text-slate-900 block">
                                     ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                   </span>
-                                  <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                                    Particular Transfer
-                                  </span>
+                                  {tr.isUnnecessary ? (
+                                    <span 
+                                      title={tr.unnecessaryReason || 'Avoidable Spend'}
+                                      className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 block"
+                                    >
+                                      🚨 Avoidable
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                      Particular Transfer
+                                    </span>
+                                  )}
                                 </div>
 
                                 {onEditTransaction && (
@@ -1234,9 +1382,17 @@ export default function ExpenseTrackerTab({
                                     {/* The Particular Amount & Edit action */}
                                     <div className="flex items-center gap-2 shrink-0">
                                       <div className="text-right">
-                                        <span className="font-extrabold font-sans text-xs sm:text-sm text-slate-900">
+                                        <span className="font-extrabold font-sans text-xs sm:text-sm text-slate-900 block">
                                           ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </span>
+                                        {tr.isUnnecessary && (
+                                          <span 
+                                            title={tr.unnecessaryReason || 'Avoidable Spend'}
+                                            className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 block mt-0.5"
+                                          >
+                                            🚨 Avoidable
+                                          </span>
+                                        )}
                                       </div>
 
                                       {onEditTransaction && (
