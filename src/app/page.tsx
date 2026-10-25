@@ -25,7 +25,8 @@ import {
   SlidersHorizontal,
   Sparkles,
   Maximize2,
-  Landmark
+  Landmark,
+  Monitor
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -50,6 +51,8 @@ import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
 import AndroidDrawer from '@/components/AndroidDrawer';
 import CategoryClassifierModal from '@/components/CategoryClassifierModal';
+import EditTransactionModal from '@/components/EditTransactionModal';
+import WebViewDashboard from '@/components/WebViewDashboard';
 import { RawTransaction, Category } from '@/types/finance';
 import { enrichAndAnalyzeTransactions, getCategoryIcon, getCategoryThemeLabel, saveUserMerchantOverride } from '@/lib/engine';
 
@@ -83,7 +86,12 @@ export default function HappyPocketApp() {
     isOpen: false,
     merchantName: '',
   });
+  const [editingTransaction, setEditingTransaction] = useState<DisplayTransaction | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // View Mode: Mobile Phone Emulator (Pixel 8 Pro) vs Clean Desktop Web Dashboard
+  const [viewMode, setViewMode] = useState<'phone' | 'web'>('phone');
 
   // Android Studio Emulator State
   const [isPoweredOn, setIsPoweredOn] = useState(true);
@@ -151,8 +159,19 @@ export default function HappyPocketApp() {
       if (savedRole && (savedRole === 'personal' || savedRole === 'medical' || savedRole === 'college')) {
         setCurrentUserRole(savedRole);
       }
+      const savedMode = localStorage.getItem('hp_view_mode') as 'phone' | 'web';
+      if (savedMode === 'phone' || savedMode === 'web') {
+        setViewMode(savedMode);
+      }
     }
   }, []);
+
+  const handleSwitchViewMode = (mode: 'phone' | 'web') => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hp_view_mode', mode);
+    }
+  };
 
   // Fetch real data from MongoDB Atlas
   const loadFromDb = async () => {
@@ -227,6 +246,9 @@ export default function HappyPocketApp() {
           userOverridden: item.userOverridden,
           isRecurringAutoPay: item.isRecurringAutoPay,
           isInternalTransfer: item.isInternalTransfer,
+          rawDescription: item.rawDescription,
+          upiRrn: item.upiRrn,
+          remark: (item as any).remark,
         }));
 
         if (converted.length > 0) {
@@ -367,6 +389,34 @@ export default function HappyPocketApp() {
 
     const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '🏷️'} ${cat}]` : '';
     showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}${themeMsg} • Settled via UPI!`);
+  };
+
+  // Instant 1-Click Pay Simulator for Web & Phone views
+  const handleQuickSimulatePay = async (preset: any) => {
+    try {
+      const res = await fetch('/api/upi/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payeeName: preset.name,
+          payeeVpa: preset.vpa,
+          amount: preset.defaultAmount,
+          note: `Instant Payment for ${preset.theme}`,
+          category: preset.category,
+          theme: preset.theme,
+          themeIcon: preset.themeIcon,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        handlePaymentSuccess(preset.defaultAmount, preset.name, data.transaction, data.payerBalance);
+        setDbCount((prev) => prev + 1);
+      } else {
+        showToast(data.error || 'Payment failed');
+      }
+    } catch (err) {
+      console.error('Quick payment error:', err);
+    }
   };
 
   // Send Money Handler
@@ -527,8 +577,131 @@ export default function HappyPocketApp() {
     showToast(`"${targetMerchant}" categorized as ${newCategory}!`);
   };
 
+  // Open Edit Transaction Modal (for unclassified, P2P, or classified transactions)
+  const handleOpenEditTransaction = (tx: DisplayTransaction) => {
+    setEditingTransaction(tx);
+    setIsEditModalOpen(true);
+  };
+
+  // Save changes to edited transaction (MongoDB Atlas + local state + classifier memory)
+  const handleSaveTransactionEdit = async (updatedData: {
+    id: string;
+    title: string;
+    category: Category;
+    accountType: 'Merchant / Business' | 'Personal';
+    theme: string;
+    themeIcon: string;
+    remark?: string;
+    rememberForFuture: boolean;
+  }) => {
+    // 1. Remember future rule if checked
+    if (updatedData.rememberForFuture && updatedData.title) {
+      saveUserMerchantOverride(updatedData.title, updatedData.category);
+    }
+
+    // 2. Persist update in MongoDB Atlas
+    try {
+      await fetch('/api/transactions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: updatedData.id,
+          cleanMerchant: updatedData.title,
+          payeeName: updatedData.title,
+          category: updatedData.category,
+          accountType: updatedData.accountType,
+          theme: updatedData.theme,
+          themeIcon: updatedData.themeIcon,
+          remark: updatedData.remark,
+          isAmbiguous: false,
+          needsReview: false,
+          confidenceScore: 100,
+          userOverridden: true,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to update transaction in MongoDB Atlas:', err);
+    }
+
+    // 3. Update local display transactions state
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== updatedData.id) return t;
+      return {
+        ...t,
+        title: updatedData.title,
+        payeeName: updatedData.title,
+        category: updatedData.category,
+        accountType: updatedData.accountType,
+        theme: updatedData.theme,
+        themeIcon: updatedData.themeIcon,
+        remark: updatedData.remark,
+        isAmbiguous: false,
+        needsReview: false,
+        confidenceScore: 100,
+        userOverridden: true,
+        type: t.amount > 0 ? 'salary' : (updatedData.category === 'Groceries' ? 'grocery' : updatedData.category === 'Transport & Fuel' ? 'fuel' : updatedData.accountType === 'Personal' ? 'transfer' : 'other'),
+      };
+    }));
+
+    // 4. Update raw transactions state & re-run financial intelligence engine
+    setExtractedRawTxs(prev => {
+      const updated = prev.map(t => {
+        if (t.id !== updatedData.id) return t;
+        return {
+          ...t,
+          payeeName: updatedData.title,
+          category: updatedData.category,
+          accountType: updatedData.accountType,
+          theme: updatedData.theme,
+          themeIcon: updatedData.themeIcon,
+          remark: updatedData.remark,
+          isAmbiguous: false,
+          needsReview: false,
+          confidenceScore: 100,
+          userOverridden: true,
+        };
+      });
+      const analyzed = enrichAndAnalyzeTransactions(updated);
+      setAnalysisResult(analyzed);
+      return updated;
+    });
+
+    setIsEditModalOpen(false);
+    setEditingTransaction(null);
+    showToast(`Updated "${updatedData.title}" to [${updatedData.themeIcon} ${updatedData.category}]!`);
+  };
+
+  // Delete transaction from MongoDB Atlas and local state
+  const handleDeleteTransaction = async (id: string) => {
+    try {
+      await fetch(`/api/transactions?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.error('Failed to delete transaction:', err);
+    }
+
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    setExtractedRawTxs(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      const analyzed = enrichAndAnalyzeTransactions(updated);
+      setAnalysisResult(analyzed);
+      return updated;
+    });
+    setDbCount(prev => Math.max(0, prev - 1));
+
+    setIsEditModalOpen(false);
+    setEditingTransaction(null);
+    showToast('Transaction deleted successfully.');
+  };
+
   // Android System Navigation Buttons handler
   const handleAndroidBack = () => {
+    if (isEditModalOpen) {
+      setIsEditModalOpen(false);
+      setEditingTransaction(null);
+      return;
+    }
     if (isDrawerOpen) {
       setIsDrawerOpen(false);
       return;
@@ -555,6 +728,8 @@ export default function HappyPocketApp() {
   };
 
   const handleAndroidHome = () => {
+    setIsEditModalOpen(false);
+    setEditingTransaction(null);
     setIsDrawerOpen(false);
     setIsScanOpen(false);
     setIsSendOpen(false);
@@ -623,8 +798,34 @@ export default function HappyPocketApp() {
             <span className="text-[10px] font-bold hidden sm:inline">Sync DB</span>
           </button>
 
-          {/* Navigation Mode Switcher: 3-Buttons vs Gesture */}
+          {/* View Mode Toggle: Mobile Phone Emulator vs Clean Full Web UI */}
           <div className="flex items-center bg-[#2B2D30] rounded-md border border-[#3E4249] p-0.5">
+            <button
+              type="button"
+              onClick={() => handleSwitchViewMode('phone')}
+              title="Mobile Phone View (Pixel 8 Pro Emulator)"
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                viewMode === 'phone' ? 'bg-[#FF8A00] text-white shadow-xs' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Smartphone className="w-3 h-3" />
+              <span>Phone UI</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchViewMode('web')}
+              title="Clean Desktop Web Dashboard View"
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                viewMode === 'web' ? 'bg-[#FF8A00] text-white shadow-xs' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Monitor className="w-3 h-3" />
+              <span>Web UI</span>
+            </button>
+          </div>
+
+          {/* Navigation Mode Switcher: 3-Buttons vs Gesture */}
+          <div className="hidden sm:flex items-center bg-[#2B2D30] rounded-md border border-[#3E4249] p-0.5">
             <button
               type="button"
               onClick={() => setNavStyle('buttons')}
@@ -665,8 +866,32 @@ export default function HappyPocketApp() {
       </header>
 
       {/* ======================================================== */}
-      {/* 2. EMULATOR WORKSPACE CANVAS (Android Studio Viewport) */}
+      {/* 2. APPLICATION WORKSPACE: WEB UI OR PHONE EMULATOR       */}
       {/* ======================================================== */}
+      {viewMode === 'web' ? (
+        <WebViewDashboard
+          transactions={transactions}
+          rawTransactions={extractedRawTxs}
+          balance={balance}
+          primaryAccount={primaryAccount}
+          activeTab={activeTab}
+          onChangeTab={(t) => setActiveTab(t)}
+          onScanClick={handleScanPay}
+          onSendClick={handleSendMoney}
+          onUploadClick={() => setIsUploadOpen(true)}
+          onAaClick={() => setIsAaOpen(true)}
+          onRefresh={loadFromDb}
+          isDbLoading={isDbLoading}
+          dbCount={dbCount}
+          onEditTransaction={handleOpenEditTransaction}
+          onClassifyMerchant={handleOpenClassifier}
+          currentUserRole={currentUserRole}
+          onSwitchAccount={() => setIsSwitcherOpen(true)}
+          onLogout={handleLogout}
+          onClearData={handleClearAllData}
+          onQuickSimulatePay={handleQuickSimulatePay}
+        />
+      ) : (
       <main className="flex-1 w-full bg-[radial-gradient(#26282E_1px,transparent_1px)] [background-size:20px_20px] flex items-center justify-center p-2 sm:p-6 overflow-y-auto relative">
         
         {/* Floating Toast Notification inside Emulator view */}
@@ -983,7 +1208,7 @@ export default function HappyPocketApp() {
                         {/* Recent Transactions List with Theme Badges */}
                         <RecentTransactions
                           transactions={transactions.slice(0, 4)}
-                          onTransactionClick={() => setActiveTab('history')}
+                          onTransactionClick={handleOpenEditTransaction}
                           onViewAll={() => setActiveTab('history')}
                         />
                       </>
@@ -997,6 +1222,7 @@ export default function HappyPocketApp() {
                           rawTransactions={extractedRawTxs} 
                           onNavigateToAdvisor={() => setActiveTab('insights')}
                           onClassifyMerchant={handleOpenClassifier}
+                          onEditTransaction={handleOpenEditTransaction}
                         />
                       </div>
                     )}
@@ -1026,6 +1252,7 @@ export default function HappyPocketApp() {
                           onOpenUpload={() => setIsUploadOpen(true)}
                           onOpenAccountAggregator={() => setIsAaOpen(true)}
                           onClassifyMerchant={handleOpenClassifier}
+                          onEditTransaction={handleOpenEditTransaction}
                         />
                       </div>
                     )}
@@ -1220,6 +1447,7 @@ export default function HappyPocketApp() {
         </div>
 
       </main>
+      )}
 
       {/* ======================================================== */}
       {/* 3. INTERACTIVE MODALS (SCAN & PAY, SEND, STATEMENT, QR) */}
@@ -1264,6 +1492,17 @@ export default function HappyPocketApp() {
         merchantName={classifierModalState.merchantName}
         currentCategory={classifierModalState.currentCategory}
         onSaveCategory={handleSaveCategoryOverride}
+      />
+
+      <EditTransactionModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingTransaction(null);
+        }}
+        transaction={editingTransaction}
+        onSave={handleSaveTransactionEdit}
+        onDelete={handleDeleteTransaction}
       />
 
       <AccountSwitcherModal

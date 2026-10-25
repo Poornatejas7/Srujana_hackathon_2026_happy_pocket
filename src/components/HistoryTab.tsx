@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Filter, ArrowDownLeft, ArrowUpRight, FileUp, Store, User, Database, AlertTriangle, Tag, Landmark } from 'lucide-react';
+import { Search, Filter, ArrowDownLeft, ArrowUpRight, FileUp, Store, User, Database, AlertTriangle, Tag, Landmark, Edit3 } from 'lucide-react';
 import { DisplayTransaction } from './RecentTransactions';
 
 interface HistoryTabProps {
@@ -9,28 +9,40 @@ interface HistoryTabProps {
   onOpenUpload: () => void;
   onOpenAccountAggregator?: () => void;
   onClassifyMerchant?: (merchantName: string, currentCategory?: string) => void;
+  onEditTransaction?: (tx: DisplayTransaction) => void;
 }
 
-export default function HistoryTab({ transactions, onOpenUpload, onOpenAccountAggregator, onClassifyMerchant }: HistoryTabProps) {
+export default function HistoryTab({ 
+  transactions, 
+  onOpenUpload, 
+  onOpenAccountAggregator, 
+  onClassifyMerchant,
+  onEditTransaction 
+}: HistoryTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'merchant' | 'personal' | 'outflow' | 'inflow'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'unclassified' | 'merchant' | 'personal' | 'outflow' | 'inflow'>('all');
+
+  const unclassifiedCount = transactions.filter(
+    t => (t.isAmbiguous || t.needsReview || t.category === 'Other / Unknown') && !t.userOverridden
+  ).length;
+  const merchantCount = transactions.filter(t => t.accountType === 'Merchant / Business').length;
+  const personalCount = transactions.filter(t => t.accountType === 'Personal').length;
 
   const filtered = transactions.filter((tx) => {
+    const isUnclassified = (tx.isAmbiguous || tx.needsReview || tx.category === 'Other / Unknown') && !tx.userOverridden;
     const matchesSearch = 
       tx.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (tx.category && tx.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (tx.accountType && tx.accountType.toLowerCase().includes(searchQuery.toLowerCase()));
     
     if (!matchesSearch) return false;
+    if (filterType === 'unclassified') return isUnclassified;
     if (filterType === 'merchant') return tx.accountType === 'Merchant / Business';
     if (filterType === 'personal') return tx.accountType === 'Personal';
     if (filterType === 'outflow') return tx.amount < 0;
     if (filterType === 'inflow') return tx.amount > 0;
     return true;
   });
-
-  const merchantCount = transactions.filter(t => t.accountType === 'Merchant / Business').length;
-  const personalCount = transactions.filter(t => t.accountType === 'Personal').length;
 
   return (
     <div className="space-y-4 animate-fadeIn">
@@ -90,8 +102,9 @@ export default function HistoryTab({ transactions, onOpenUpload, onOpenAccountAg
       <div className="flex gap-1.5 text-xs overflow-x-auto pb-1 scrollbar-none">
         {[
           { id: 'all', label: `All (${transactions.length})` },
+          ...(unclassifiedCount > 0 ? [{ id: 'unclassified', label: `⚠️ Unclassified (${unclassifiedCount})` }] : []),
           { id: 'merchant', label: `Merchants (${merchantCount})` },
-          { id: 'personal', label: `Personal (${personalCount})` },
+          { id: 'personal', label: `Personal P2P (${personalCount})` },
           { id: 'outflow', label: 'Debits (-)' },
           { id: 'inflow', label: 'Credits (+)' },
         ].map((f) => (
@@ -119,10 +132,14 @@ export default function HistoryTab({ transactions, onOpenUpload, onOpenAccountAg
         ) : (
           filtered.map((tx) => {
             const isInflow = tx.amount > 0;
+            const isUnclassified = (tx.isAmbiguous || tx.needsReview || tx.category === 'Other / Unknown') && !tx.userOverridden;
+            const isP2P = tx.accountType === 'Personal' || tx.category === 'Reimbursement / Split' || tx.category === 'Internal Transfer';
+
             return (
               <div
                 key={tx.id}
-                className="py-3 flex items-center justify-between gap-3 first:pt-1 last:pb-1 group hover:bg-slate-50/70 -mx-2 px-2 rounded-xl transition"
+                onClick={() => onEditTransaction?.(tx)}
+                className="py-3 flex items-center justify-between gap-3 first:pt-1 last:pb-1 group hover:bg-slate-50/70 -mx-2 px-2 rounded-xl transition cursor-pointer"
               >
                 {/* Left: Direction icon & Title */}
                 <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -155,31 +172,45 @@ export default function HistoryTab({ transactions, onOpenUpload, onOpenAccountAg
                         </span>
                       )}
 
-                      {/* Ambiguity / Needs Category confirmation button */}
-                      {(tx.needsReview || tx.isAmbiguous || /TRADER|ENTERPRISE/i.test(tx.title)) && !tx.userOverridden ? (
+                      {/* Explicit Edit / Reclassify Buttons */}
+                      {isUnclassified ? (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onClassifyMerchant?.(tx.title, tx.category);
+                            onEditTransaction?.(tx);
                           }}
-                          className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition active:scale-95 cursor-pointer shadow-2xs"
-                          title="Click to tell Happy Pocket which category this store belongs to"
+                          className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition active:scale-95 cursor-pointer shadow-2xs"
+                          title="Click to classify unestablished vendor"
                         >
-                          <AlertTriangle className="w-2.5 h-2.5 text-amber-700 shrink-0" />
-                          <span>Confirm Category</span>
+                          <AlertTriangle className="w-3 h-3 text-amber-700 shrink-0" />
+                          <span>Classify Entity</span>
+                        </button>
+                      ) : isP2P ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditTransaction?.(tx);
+                          }}
+                          className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition cursor-pointer"
+                          title="Edit P2P transfer details"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit P2P</span>
                         </button>
                       ) : (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onClassifyMerchant?.(tx.title, tx.category);
+                            onEditTransaction?.(tx);
                           }}
-                          className="text-[9px] font-medium px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition opacity-0 group-hover:opacity-100 cursor-pointer"
-                          title="Change Category"
+                          className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition cursor-pointer"
+                          title="Edit classified merchant transaction"
                         >
-                          Edit
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit</span>
                         </button>
                       )}
                     </div>
@@ -196,8 +227,8 @@ export default function HistoryTab({ transactions, onOpenUpload, onOpenAccountAg
                   </div>
                 </div>
 
-                {/* Right: Amount */}
-                <div className="text-right shrink-0">
+                {/* Right: Amount & Edit Hint */}
+                <div className="text-right shrink-0 flex items-center gap-2">
                   <span
                     className={`text-xs sm:text-sm font-extrabold font-sans tracking-tight ${
                       isInflow ? 'text-emerald-600' : 'text-slate-900'

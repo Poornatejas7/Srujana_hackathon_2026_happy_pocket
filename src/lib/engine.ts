@@ -109,10 +109,11 @@ export interface SimulatedAccount {
   accountType: 'Merchant / Business' | 'Personal';
 }
 
-/**
- * 12 Curated Indian Merchant Accounts representing diverse spending themes
- */
 export const PRESET_MERCHANT_ACCOUNTS: SimulatedAccount[] = [
+  { id: 'm_netflix', name: 'Netflix Entertainment India', vpa: 'netflix.pay@hdfcbank', theme: 'Netflix OTT Streaming', themeIcon: '🎬', category: 'Entertainment', defaultAmount: 499, accountType: 'Merchant / Business' },
+  { id: 'm_prime', name: 'Amazon Prime Video & OTT', vpa: 'amazonprime@apl', theme: 'Prime Video OTT Subscription', themeIcon: '🍿', category: 'Entertainment', defaultAmount: 299, accountType: 'Merchant / Business' },
+  { id: 'm_hotstar', name: 'Disney+ Hotstar India', vpa: 'hotstar.sub@icici', theme: 'Disney+ Hotstar Streaming', themeIcon: '📺', category: 'Entertainment', defaultAmount: 149, accountType: 'Merchant / Business' },
+  { id: 'm_bookmyshow', name: 'BookMyShow Cinema & Events', vpa: 'bookmyshow@kotak', theme: 'Cinema & Movie Tickets', themeIcon: '🎟️', category: 'Entertainment', defaultAmount: 650, accountType: 'Merchant / Business' },
   { id: 'm_amazon', name: 'Amazon India Marketplace', vpa: 'amazonpay@apl', theme: 'E-Commerce & Retail Shopping', themeIcon: '📦', category: 'Shopping & Discretionary', defaultAmount: 850, accountType: 'Merchant / Business' },
   { id: 'm_iyengar_bakery', name: 'Iyengar Bakery & Sweets', vpa: 'iyengarbakery@paytm', theme: 'Bakery & Fresh Confectionery', themeIcon: '🥖', category: 'Dining & Nightlife', defaultAmount: 180, accountType: 'Merchant / Business' },
   { id: 'm_lakshmi_kirana', name: 'Sri Lakshmi Kirana Stores', vpa: 'lakshmikirana@upi', theme: 'Groceries & Daily Essentials', themeIcon: '🥦', category: 'Groceries', defaultAmount: 480, accountType: 'Merchant / Business' },
@@ -120,7 +121,7 @@ export const PRESET_MERCHANT_ACCOUNTS: SimulatedAccount[] = [
   { id: 'm_hanuman_hardware', name: 'Sri Hanuman Hardware', vpa: 'hanumanhardware@upi', theme: 'Hardware, Paints & Electricals', themeIcon: '🔧', category: 'Housing & Utilities', defaultAmount: 750, accountType: 'Merchant / Business' },
   { id: 'm_blinkit', name: 'Blinkit Quick Commerce', vpa: 'blinkit.fresh@icici', theme: 'Groceries & Daily Essentials', themeIcon: '🥦', category: 'Groceries', defaultAmount: 480, accountType: 'Merchant / Business' },
   { id: 'm_swiggy', name: 'Swiggy Food Delivery', vpa: 'swiggy.orders@icici', theme: 'Food & Dining Delivery', themeIcon: '🍔', category: 'Dining & Nightlife', defaultAmount: 350, accountType: 'Merchant / Business' },
-  { id: 'm_spotify', name: 'Spotify India', vpa: 'spotify@icici', theme: 'Music & Audio Streaming', themeIcon: '🎵', category: 'Subscriptions & Digital', defaultAmount: 119, accountType: 'Merchant / Business' },
+  { id: 'm_spotify', name: 'Spotify India', vpa: 'spotify@icici', theme: 'Music & Audio Streaming', themeIcon: '🎧', category: 'Entertainment', defaultAmount: 119, accountType: 'Merchant / Business' },
   { id: 'm_iocl', name: 'Indian Oil Fuel Station', vpa: 'iocl.fuels@sbi', theme: 'Fuel & Petroleum', themeIcon: '⛽', category: 'Transport & Fuel', defaultAmount: 500, accountType: 'Merchant / Business' },
   { id: 'm_apollo', name: 'Apollo Pharmacy', vpa: 'apollo.meds@icici', theme: 'Medicines & Healthcare', themeIcon: '💊', category: 'Healthcare', defaultAmount: 380, accountType: 'Merchant / Business' },
   { id: 'm_citycare_medicals', name: 'City Care Medicals & Pharmacy', vpa: 'citycaremedicals@okhdfcbank', theme: 'Medical Shop & Pharmaceuticals', themeIcon: '💊', category: 'Healthcare', defaultAmount: 420, accountType: 'Merchant / Business' },
@@ -205,20 +206,77 @@ export function inferMerchantTheme(
     };
   }
 
-  // 2. Music & Audio Streaming (e.g. Spotify, Apple Music, Gaana)
+  // 1.5. OTT Video & Digital Entertainment (Netflix, Prime Video, Disney+ Hotstar, SonyLIV, Zee5, JioCinema, YouTube, Apple TV)
+  if (
+    upper.includes('NETFLIX') || upper.includes('PRIME') || upper.includes('HOTSTAR') ||
+    upper.includes('DISNEY') || upper.includes('SONYLIV') || upper.includes('SONY LIV') ||
+    upper.includes('ZEE5') || upper.includes('JIOCINEMA') || upper.includes('JIO CINEMA') ||
+    upper.includes('YOUTUBE') || upper.includes('APPLE TV') || upper.includes('APPLETV') ||
+    upper.includes('AHA') || upper.includes('SUNNXT') || upper.includes('HOICHOI') ||
+    upper.includes('LIONSGATE') || upper.includes('CRUNCHYROLL') || upper.includes('DISCOVERY+')
+  ) {
+    let cleanName = cleanInput || 'OTT Video Entertainment';
+    let specificTheme = 'OTT Video Streaming';
+    let icon = '🎬';
+
+    if (upper.includes('NETFLIX')) {
+      cleanName = 'Netflix India';
+      specificTheme = 'Netflix OTT Streaming';
+      icon = '🎬';
+    } else if (upper.includes('PRIME')) {
+      cleanName = 'Amazon Prime Video';
+      specificTheme = 'Prime Video OTT Subscription';
+      icon = '🍿';
+    } else if (upper.includes('HOTSTAR') || upper.includes('DISNEY')) {
+      cleanName = 'Disney+ Hotstar';
+      specificTheme = 'Disney+ Hotstar Streaming';
+      icon = '📺';
+    } else if (upper.includes('SONYLIV') || upper.includes('SONY LIV')) {
+      cleanName = 'SonyLIV Entertainment';
+      specificTheme = 'SonyLIV OTT Streaming';
+      icon = '🎬';
+    } else if (upper.includes('ZEE5')) {
+      cleanName = 'Zee5 Entertainment';
+      specificTheme = 'Zee5 OTT Streaming';
+      icon = '📺';
+    } else if (upper.includes('JIOCINEMA') || upper.includes('JIO CINEMA')) {
+      cleanName = 'JioCinema Premium';
+      specificTheme = 'JioCinema OTT Streaming';
+      icon = '🍿';
+    } else if (upper.includes('YOUTUBE')) {
+      cleanName = 'YouTube Premium';
+      specificTheme = 'YouTube Premium & Streaming';
+      icon = '▶️';
+    }
+
+    return {
+      theme: specificTheme,
+      themeCategory: 'Entertainment',
+      themeIcon: icon,
+      accountType: 'Merchant / Business',
+      cleanName,
+      confidence: 'high',
+      confidenceScore: 100,
+      isAmbiguous: false,
+    };
+  }
+
+  // 2. Music & Audio Streaming (e.g. Spotify, Apple Music, Gaana, Wynk, JioSaavn)
   if (
     upper.includes('SPOTIFY') || upper.includes('MUSIC') || upper.includes('AUDIO') ||
     upper.includes('GAANA') || upper.includes('WYNK') || upper.includes('SOUNDCLOUD') ||
-    upper.includes('PODCAST') || upper.includes('STREAM') || upper.includes('TUNE')
+    upper.includes('PODCAST') || upper.includes('STREAM') || upper.includes('TUNE') ||
+    upper.includes('JIOSAAVN') || upper.includes('SAAVN') || upper.includes('AUDIBLE') ||
+    upper.includes('KUKU FM') || upper.includes('POCKET FM')
   ) {
     return {
       theme: 'Music & Audio Streaming',
-      themeCategory: 'Subscriptions & Digital',
-      themeIcon: '🎵',
+      themeCategory: 'Entertainment',
+      themeIcon: '🎧',
       accountType: 'Merchant / Business',
-      cleanName: cleanInput || 'Spotify India',
+      cleanName: upper.includes('SPOTIFY') ? 'Spotify India' : (cleanInput || 'Spotify Audio Streaming'),
       confidence: 'high',
-      confidenceScore: 95,
+      confidenceScore: 99,
       isAmbiguous: false,
     };
   }
@@ -701,17 +759,73 @@ export function extractUPIEntity(raw: string, payeeName?: string, vpaHandle?: st
     };
   }
 
-  // 3. Indian Recurring & Digital Subscriptions (Merchant / Business)
+  // 3. Indian Recurring Entertainment & Digital Subscriptions (Merchant / Business)
   if (upper.includes('NETFLIX')) {
     return {
       cleanName: 'Netflix India',
       accountType: 'Merchant / Business',
-      theme: 'OTT Digital Entertainment',
+      theme: 'Netflix OTT Streaming',
       themeIcon: '🎬',
-      category: 'Subscriptions & Digital',
+      category: 'Entertainment',
       tier: 'Discretionary',
       isSelfTransfer: false,
       isRecurring: true,
+      isRefund: false,
+      confidenceScore: 1.0
+    };
+  }
+  if (upper.includes('PRIME') || upper.includes('AMZN PRIME') || upper.includes('AMAZON PRIME')) {
+    return {
+      cleanName: 'Amazon Prime Video',
+      accountType: 'Merchant / Business',
+      theme: 'Prime Video OTT Subscription',
+      themeIcon: '🍿',
+      category: 'Entertainment',
+      tier: 'Discretionary',
+      isSelfTransfer: false,
+      isRecurring: true,
+      isRefund: false,
+      confidenceScore: 1.0
+    };
+  }
+  if (upper.includes('HOTSTAR') || upper.includes('DISNEY')) {
+    return {
+      cleanName: 'Disney+ Hotstar',
+      accountType: 'Merchant / Business',
+      theme: 'Disney+ Hotstar Streaming',
+      themeIcon: '📺',
+      category: 'Entertainment',
+      tier: 'Discretionary',
+      isSelfTransfer: false,
+      isRecurring: true,
+      isRefund: false,
+      confidenceScore: 1.0
+    };
+  }
+  if (upper.includes('SPOTIFY')) {
+    return {
+      cleanName: 'Spotify India',
+      accountType: 'Merchant / Business',
+      theme: 'Spotify Music Streaming',
+      themeIcon: '🎧',
+      category: 'Entertainment',
+      tier: 'Discretionary',
+      isSelfTransfer: false,
+      isRecurring: true,
+      isRefund: false,
+      confidenceScore: 1.0
+    };
+  }
+  if (upper.includes('BOOKMYSHOW') || upper.includes('PVR') || upper.includes('INOX') || upper.includes('CINEPOLIS')) {
+    return {
+      cleanName: upper.includes('BOOKMYSHOW') ? 'BookMyShow Entertainment' : (upper.includes('PVR') ? 'PVR Cinemas' : 'Movie Cinema Tickets'),
+      accountType: 'Merchant / Business',
+      theme: 'Cinema & Movie Tickets',
+      themeIcon: '🎟️',
+      category: 'Entertainment',
+      tier: 'Discretionary',
+      isSelfTransfer: false,
+      isRecurring: false,
       isRefund: false,
       confidenceScore: 0.99
     };

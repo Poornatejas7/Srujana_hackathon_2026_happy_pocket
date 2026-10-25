@@ -19,9 +19,11 @@ export interface DisplayTransaction {
   isAmbiguous?: boolean;
   needsReview?: boolean;
   userOverridden?: boolean;
-  confidenceScore?: number;
   isRecurringAutoPay?: boolean;
   isInternalTransfer?: boolean;
+  rawDescription?: string;
+  upiRrn?: string;
+  remark?: string;
 }
 
 export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [];
@@ -128,6 +130,11 @@ export default function RecentTransactions({
                           {tx.accountType === 'Merchant / Business' ? 'Merchant' : 'Personal'}
                         </span>
                       )}
+                      {(tx.needsReview || tx.isAmbiguous || tx.category === 'Other / Unknown') && !tx.userOverridden && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 border border-amber-300">
+                          ⚠️ Review
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
@@ -142,8 +149,8 @@ export default function RecentTransactions({
                   </div>
                 </div>
 
-                {/* Right: Amount */}
-                <div className="text-right shrink-0 ml-2">
+                {/* Right: Amount & Edit indicator */}
+                <div className="text-right shrink-0 ml-2 flex items-center gap-2">
                   <span
                     className={`text-sm sm:text-base font-extrabold font-sans tracking-tight ${
                       isInflow ? 'text-[#10B981]' : 'text-slate-900'
@@ -154,6 +161,9 @@ export default function RecentTransactions({
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
+                  </span>
+                  <span className="text-xs text-slate-400 group-hover:text-orange-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    ✏️
                   </span>
                 </div>
               </div>

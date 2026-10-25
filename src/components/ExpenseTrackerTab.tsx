@@ -36,7 +36,8 @@ import {
   AlertTriangle,
   Zap,
   ArrowRight,
-  HelpCircle
+  HelpCircle,
+  Edit2
 } from 'lucide-react';
 import { DisplayTransaction } from './RecentTransactions';
 import { RawTransaction } from '@/types/finance';
@@ -46,6 +47,7 @@ interface ExpenseTrackerTabProps {
   rawTransactions?: RawTransaction[];
   onNavigateToAdvisor?: () => void;
   onClassifyMerchant?: (merchantName: string, currentCategory?: string) => void;
+  onEditTransaction?: (tx: DisplayTransaction) => void;
 }
 
 interface TransferItem {
@@ -272,6 +274,7 @@ export default function ExpenseTrackerTab({
   rawTransactions = [],
   onNavigateToAdvisor,
   onClassifyMerchant,
+  onEditTransaction,
 }: ExpenseTrackerTabProps) {
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [expandedMerchantName, setExpandedMerchantName] = useState<string | null>(null);
@@ -632,7 +635,14 @@ export default function ExpenseTrackerTab({
               <button
                 key={r.name}
                 type="button"
-                onClick={() => onClassifyMerchant?.(r.name, r.category)}
+                onClick={() => {
+                  const match = transactions.find(t => t.title.toLowerCase().includes(r.name.toLowerCase()));
+                  if (match && onEditTransaction) {
+                    onEditTransaction(match);
+                  } else {
+                    onClassifyMerchant?.(r.name, r.category);
+                  }
+                }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
               >
                 <span>🏪 {r.name}</span>
@@ -989,7 +999,7 @@ export default function ExpenseTrackerTab({
                           {acc.transfers.map((tr) => (
                             <div
                               key={tr.id}
-                              className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/70 flex items-center justify-between text-xs"
+                              className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/70 flex items-center justify-between text-xs hover:border-orange-300 transition"
                             >
                               <div className="space-y-0.5 min-w-0 flex-1 mr-2">
                                 <div className="flex items-center gap-2">
@@ -1006,13 +1016,30 @@ export default function ExpenseTrackerTab({
                                 </div>
                               </div>
 
-                              <div className="text-right shrink-0">
-                                <span className="font-extrabold font-sans text-sm text-slate-900 block">
-                                  ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </span>
-                                <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                                  Particular Transfer
-                                </span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right">
+                                  <span className="font-extrabold font-sans text-sm text-slate-900 block">
+                                    ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  </span>
+                                  <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                    Particular Transfer
+                                  </span>
+                                </div>
+
+                                {onEditTransaction && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const match = transactions.find(t => t.id === tr.id);
+                                      if (match) onEditTransaction(match);
+                                    }}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition cursor-pointer border border-transparent hover:border-orange-200"
+                                    title="Edit & Classify Transaction"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -1204,11 +1231,28 @@ export default function ExpenseTrackerTab({
                                       </div>
                                     </div>
 
-                                    {/* The Particular Amount */}
-                                    <div className="text-right shrink-0">
-                                      <span className="font-extrabold font-sans text-xs sm:text-sm text-slate-900">
-                                        ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                      </span>
+                                    {/* The Particular Amount & Edit action */}
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <div className="text-right">
+                                        <span className="font-extrabold font-sans text-xs sm:text-sm text-slate-900">
+                                          ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+
+                                      {onEditTransaction && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const match = transactions.find(t => t.id === tr.id);
+                                            if (match) onEditTransaction(match);
+                                          }}
+                                          className="p-1 rounded-md text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition cursor-pointer"
+                                          title="Edit & Classify Transaction"
+                                        >
+                                          <Edit2 className="w-3 h-3" />
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
