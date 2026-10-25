@@ -209,9 +209,7 @@ function DynamicDonutChart({ slices }: { slices: { percent: number; color: strin
         fill={slice.color}
         stroke="#FFFFFF"
         strokeWidth="2.5"
-      >
-        <title>{slice.label}: {slice.percent.toFixed(1)}%</title>
-      </path>
+      />
     );
   });
 
