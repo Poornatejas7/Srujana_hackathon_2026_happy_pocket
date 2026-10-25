@@ -21,7 +21,7 @@ export default function AccountCard({
 
   return (
     <div
-      className={`relative w-full overflow-hidden rounded-[28px] sm:rounded-[32px] bg-[#0A172E] text-white p-6 sm:p-7 shadow-[0_12px_36px_rgba(10,23,46,0.28)] transition-all duration-300 hover:shadow-[0_16px_44px_rgba(10,23,46,0.36)] ${className}`}
+      className={`relative w-full overflow-hidden rounded-[28px] sm:rounded-[32px] bg-[#0A172E] text-white p-5 sm:p-7 shadow-[0_12px_36px_rgba(10,23,46,0.28)] transition-all duration-300 hover:shadow-[0_16px_44px_rgba(10,23,46,0.36)] ${className}`}
     >
       {/* Background Smooth Orange Wave in Bottom-Right Corner */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[inherit]">
@@ -52,12 +52,12 @@ export default function AccountCard({
       </div>
 
       {/* Card Content */}
-      <div className="relative z-10 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
+      <div className="relative z-10 flex flex-col justify-between min-h-[115px] sm:min-h-[135px]">
         {/* Top Row: Bank Info & Visibility Eye */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 text-white shadow-inner">
-              <Landmark className="w-5 h-5 stroke-[2.2]" />
+            <div className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 text-white shadow-inner">
+              <Landmark className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold tracking-tight text-white leading-tight">
@@ -72,21 +72,21 @@ export default function AccountCard({
           <button
             type="button"
             onClick={() => setShowBalance(!showBalance)}
-            className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400/50"
+            className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400/50"
             aria-label={showBalance ? "Hide balance" : "Show balance"}
             title={showBalance ? "Hide balance" : "Show balance"}
           >
             {showBalance ? (
-              <Eye className="w-5 h-5 stroke-[2]" />
+              <Eye className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2]" />
             ) : (
-              <EyeOff className="w-5 h-5 stroke-[2]" />
+              <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2]" />
             )}
           </button>
         </div>
 
         {/* Bottom Row: Amount */}
-        <div className="mt-5 sm:mt-6">
-          <div className="text-2xl sm:text-3xl md:text-[34px] font-extrabold tracking-tight font-sans text-white select-none drop-shadow-sm flex items-center">
+        <div className="mt-4 sm:mt-6">
+          <div className="text-[26px] sm:text-3xl md:text-[34px] font-extrabold tracking-tight font-sans text-white select-none drop-shadow-sm flex items-center">
             {showBalance ? (
               <>
                 <span className="font-semibold mr-0.5">₹</span>

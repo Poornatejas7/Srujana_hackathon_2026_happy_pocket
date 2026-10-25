@@ -41,6 +41,11 @@ import SubscriptionsTab from '@/components/SubscriptionsTab';
 import AIAdvisorTab from '@/components/AIAdvisorTab';
 import TaxFinderTab from '@/components/TaxFinderTab';
 import MultiBankWealthTab from '@/components/MultiBankWealthTab';
+import ExpenseTrackerTab from '@/components/ExpenseTrackerTab';
+import InsightsTab from '@/components/InsightsTab';
+import PaymentsTab from '@/components/PaymentsTab';
+import HistoryTab from '@/components/HistoryTab';
+import ProfileTab from '@/components/ProfileTab';
 import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
 import { RawTransaction, Category } from '@/types/finance';
@@ -579,6 +584,34 @@ export default function HappyPocketApp() {
                     </>
                   )}
 
+                  {activeTab === 'expense' && (
+                    <ExpenseTrackerTab />
+                  )}
+
+                  {activeTab === 'insights' && (
+                    <InsightsTab />
+                  )}
+
+                  {activeTab === 'payments' && (
+                    <PaymentsTab
+                      onScanClick={handleScanPay}
+                      onSendClick={handleSendMoney}
+                    />
+                  )}
+
+                  {activeTab === 'history' && (
+                    <HistoryTab
+                      transactions={transactions}
+                      onOpenUpload={() => setIsUploadOpen(true)}
+                    />
+                  )}
+
+                  {activeTab === 'profile' && (
+                    <ProfileTab 
+                      onShowQR={() => setIsQrOpen(true)} 
+                    />
+                  )}
+
                   {activeTab === 'subscriptions' && (
                     <SubscriptionsTab
                       subscriptions={analysisResult?.subscriptions || []}
@@ -739,6 +772,8 @@ export default function HappyPocketApp() {
                 <div className="flex items-center gap-1.5 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.03)] overflow-x-auto">
                   {[
                     { id: 'insights', label: 'Financial Discovery' },
+                    { id: 'expense_tracker', label: 'Expense Tracker' },
+                    { id: 'smart_insights', label: 'Smart Insights' },
                     { id: 'ledger', label: `Normalized Ledger (${analysisResult ? analysisResult.enriched.length : transactions.length})` },
                     { id: 'subscriptions', label: `Recurring Drains (${analysisResult ? analysisResult.subscriptions.length : 2})` },
                     { id: 'tax', label: 'Tax Deductions' },
@@ -758,6 +793,20 @@ export default function HappyPocketApp() {
                     </button>
                   ))}
                 </div>
+
+                {/* SubTab: Expense Tracker */}
+                {analyticsSubTab === ('expense_tracker' as any) && (
+                  <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
+                    <ExpenseTrackerTab />
+                  </div>
+                )}
+
+                {/* SubTab: Smart Insights */}
+                {analyticsSubTab === ('smart_insights' as any) && (
+                  <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
+                    <InsightsTab />
+                  </div>
+                )}
 
                 {/* SubTab 1: Financial Discovery & Insights */}
                 {analyticsSubTab === 'insights' && (

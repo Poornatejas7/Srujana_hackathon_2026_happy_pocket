@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Happy Pocket - Smart UPI Banking & Financial Visibility",
-  description: "Seamless UPI payments, bank statement intelligence, and hidden expense discovery with Happy Pocket",
+  description: "Seamless UPI payments, expense tracking, bank statement intelligence, and hidden savings with Happy Pocket",
 };
 
 export const viewport: Viewport = {
@@ -20,8 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full flex flex-col bg-[#eef2f6] text-slate-900 antialiased selection:bg-orange-500 selection:text-white">
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <body 
+        className="min-h-full flex flex-col bg-[#eef2f6] text-slate-900 antialiased selection:bg-orange-500 selection:text-white"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
