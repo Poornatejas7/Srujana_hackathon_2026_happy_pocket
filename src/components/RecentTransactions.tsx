@@ -10,7 +10,26 @@ export interface DisplayTransaction {
   amount: number; // positive for inflow, negative for outflow
   type: 'grocery' | 'fuel' | 'salary' | 'transfer' | 'other';
   rawTimeText?: string;
+  accountType?: 'Merchant / Business' | 'Personal';
+  category?: string;
+  theme?: string;
+  themeIcon?: string;
+  vpaHandle?: string;
+  payeeName?: string;
+  isAmbiguous?: boolean;
+  needsReview?: boolean;
+  userOverridden?: boolean;
+  isRecurringAutoPay?: boolean;
+  isInternalTransfer?: boolean;
+  rawDescription?: string;
+  upiRrn?: string;
+  remark?: string;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
 }
+
+export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [];
 
 interface RecentTransactionsProps {
   transactions?: DisplayTransaction[];
@@ -18,47 +37,25 @@ interface RecentTransactionsProps {
   onTransactionClick?: (tx: DisplayTransaction) => void;
 }
 
-export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [
-  {
-    id: 'tx_default_1',
-    title: 'Grocery',
-    rawTimeText: 'Today, 10:24 AM',
-    timestamp: new Date().toISOString(),
-    amount: -1299.00,
-    type: 'grocery',
-  },
-  {
-    id: 'tx_default_2',
-    title: 'Fuel',
-    rawTimeText: 'Today, 08:15 AM',
-    timestamp: new Date().toISOString(),
-    amount: -650.00,
-    type: 'fuel',
-  },
-  {
-    id: 'tx_default_3',
-    title: 'Salary',
-    rawTimeText: 'Yesterday, 12:00 PM',
-    timestamp: new Date(Date.now() - 86400000).toISOString(),
-    amount: 24000.00,
-    type: 'salary',
-  },
-];
-
 export default function RecentTransactions({
-  transactions = [],
+  transactions = DEFAULT_RECENT_TRANSACTIONS,
   onViewAll,
   onTransactionClick,
 }: RecentTransactionsProps) {
-  const displayItems = transactions || [];
+  const displayItems = transactions && transactions.length > 0 ? transactions : [];
 
   return (
-    <div className="w-full rounded-[26px] sm:rounded-[30px] bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] border border-slate-100/90">
+    <div className="w-full rounded-[26px] sm:rounded-[30px] bg-white p-5 sm:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] border border-slate-100/80">
       {/* Title & View All */}
-      <div className="flex items-center justify-between mb-3.5 sm:mb-4">
-        <h3 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight">
-          Recent Transactions
-        </h3>
+      <div className="flex items-center justify-between mb-4 sm:mb-5">
+        <div className="flex items-center gap-2">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+            Recent Transactions
+          </h3>
+          <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+            Atlas Synced
+          </span>
+        </div>
         {onViewAll && (
           <button
             type="button"
@@ -71,33 +68,39 @@ export default function RecentTransactions({
       </div>
 
       {/* Transaction List */}
-      <div className="space-y-2.5 sm:space-y-3.5">
+      <div className="space-y-3 sm:space-y-3.5">
         {displayItems.length === 0 ? (
-          <div className="py-6 text-center text-xs text-slate-400">
-            No transactions recorded yet.
+          <div className="py-7 text-center space-y-1.5">
+            <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-500 mx-auto flex items-center justify-center">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-slate-800">No transactions recorded yet</p>
+            <p className="text-[11px] text-slate-400 max-w-[240px] mx-auto leading-relaxed">
+              Your ledger is clean. Tap <strong className="text-orange-600">Scan &amp; Pay</strong> or <strong className="text-orange-600">Send Money</strong> above to add your own transaction.
+            </p>
           </div>
         ) : (
           displayItems.map((tx) => {
             const isInflow = tx.amount > 0;
 
             // Render proper icon & background per type
-            let iconElement = <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />;
+            let iconElement = <ShoppingCart className="w-5 h-5 stroke-[2.2]" />;
             let iconBg = 'bg-[#FFF3EC] text-[#F97316]';
 
-            if (tx.type === 'grocery') {
-              iconElement = <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />;
+            if (tx.type === 'grocery' || (tx.category === 'Groceries')) {
+              iconElement = <ShoppingCart className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#FFF3EC] text-[#F97316]';
-            } else if (tx.type === 'fuel') {
-              iconElement = <Fuel className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />;
+            } else if (tx.type === 'fuel' || (tx.category === 'Transport & Fuel')) {
+              iconElement = <Fuel className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#FFF3EC] text-[#F97316]';
-            } else if (tx.type === 'salary') {
-              iconElement = <Wallet className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />;
+            } else if (tx.type === 'salary' || isInflow) {
+              iconElement = <Wallet className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#EBFBF3] text-[#10B981]';
-            } else if (isInflow) {
-              iconElement = <ArrowDownLeft className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />;
-              iconBg = 'bg-[#EBFBF3] text-[#10B981]';
+            } else if (tx.type === 'transfer' || tx.accountType === 'Personal') {
+              iconElement = <ArrowUpRight className="w-5 h-5 stroke-[2.2]" />;
+              iconBg = 'bg-[#EFF6FF] text-[#3B82F6]';
             } else {
-              iconElement = <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />;
+              iconElement = <ArrowUpRight className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#FFF3EC] text-[#F97316]';
             }
 
@@ -105,29 +108,62 @@ export default function RecentTransactions({
               <div
                 key={tx.id}
                 onClick={() => onTransactionClick?.(tx)}
-                className="flex items-center justify-between p-2 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer group"
+                className="flex items-center justify-between p-2 rounded-2xl hover:bg-slate-50/80 transition-colors cursor-pointer group"
               >
                 {/* Left: Icon & Meta */}
-                <div className="flex items-center gap-3 sm:gap-3.5">
+                <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
                   <div
-                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 duration-200 ${iconBg}`}
+                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 duration-200 ${iconBg}`}
                   >
                     {iconElement}
                   </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-orange-600 transition-colors">
-                      {tx.title}
-                    </h4>
-                    <p className="text-[10px] sm:text-xs text-slate-400 font-medium mt-0.5">
-                      {tx.rawTimeText || tx.timestamp}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-orange-600 transition-colors truncate">
+                        {tx.title}
+                      </h4>
+                      {tx.accountType && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0 ${
+                            tx.accountType === 'Merchant / Business'
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : 'bg-blue-50 text-blue-700 border border-blue-200'
+                          }`}
+                        >
+                          {tx.accountType === 'Merchant / Business' ? 'Merchant' : 'Personal'}
+                        </span>
+                      )}
+                      {(tx.needsReview || tx.isAmbiguous || tx.category === 'Other / Unknown') && !tx.userOverridden && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 border border-amber-300">
+                          ⚠️ Review
+                        </span>
+                      )}
+                      {tx.isUnnecessary && (
+                        <span 
+                          title={tx.unnecessaryReason || 'Avoidable Spend'}
+                          className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-rose-50 text-rose-700 border border-rose-300 flex items-center gap-0.5"
+                        >
+                          <span>🚨 Avoidable</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
+                        {tx.rawTimeText || tx.timestamp}
+                      </p>
+                      {tx.theme && (
+                        <span className="text-[10px] text-slate-500 font-medium truncate max-w-[170px]">
+                          • {tx.themeIcon} {tx.theme}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Right: Amount */}
-                <div className="text-right">
+                {/* Right: Amount & Edit indicator */}
+                <div className="text-right shrink-0 ml-2 flex items-center gap-2">
                   <span
-                    className={`text-xs sm:text-sm font-extrabold font-sans tracking-tight ${
+                    className={`text-sm sm:text-base font-extrabold font-sans tracking-tight ${
                       isInflow ? 'text-[#10B981]' : 'text-slate-900'
                     }`}
                   >
@@ -136,6 +172,9 @@ export default function RecentTransactions({
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
+                  </span>
+                  <span className="text-xs text-slate-400 group-hover:text-orange-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                    ✏️
                   </span>
                 </div>
               </div>

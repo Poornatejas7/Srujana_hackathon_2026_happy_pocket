@@ -16,10 +16,20 @@ export type Category =
   | 'Subscriptions & Digital'
   | 'Transport & Fuel'
   | 'Healthcare'
+  | 'Education'
+  | 'Investments'
+  | 'Insurance'
+  | 'Loan & EMI'
+  | 'Travel'
+  | 'Entertainment'
   | 'Shopping & Discretionary'
+  | 'Electronics'
+  | 'Personal Care'
   | 'Internal Transfer'
   | 'Reimbursement / Split'
-  | 'Income';
+  | 'Unnecessary & Impulse Spend'
+  | 'Income'
+  | 'Other / Unknown';
 
 export interface RawTransaction {
   id: string;
@@ -38,18 +48,27 @@ export interface RawTransaction {
   remark?: string;           // Transaction user note e.g. "Sent", "UPI", "Execu", "Paym"
   terminalRef?: string;      // Core banking terminal reference e.g. "0097695162091 AT 40184"
   branchLocation?: string;   // Branch / City e.g. "DONIMALAI TOWNSHIP"
-  category?: string;
-  cleanMerchant?: string;
-  isRecurring?: boolean;
-  tier?: string;
+  accountType?: 'Merchant / Business' | 'Personal';
+  theme?: string;            // What the merchant is selling (e.g., "Music & Audio Streaming", "Clothing & Fashion Apparel")
+  themeIcon?: string;        // Emoji icon for theme
   isInternalTransfer?: boolean;
-  isRefundOrReversal?: boolean;
-  netOutflowAmount?: number;
-  userOverridden?: boolean;
+  isReimbursementOffset?: boolean;
+  isRecurringAutoPay?: boolean;
+  category?: Category | string;
+  isAmbiguous?: boolean;     // True for generic merchants like Lakshmi Traders, Hanuman Enterprises
+  needsReview?: boolean;     // Needs user category confirmation
+  confidenceScore?: number;  // 0-100
+  userOverridden?: boolean;  // True if user customized the category
+  isUnnecessary?: boolean;   // Avoidable / Impulse expenditure flag
+  unnecessaryReason?: string; // Reason e.g. "Impulse Food Delivery", "Fast Fashion", "Unused OTT"
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
 }
 
 export interface EnrichedTransaction extends RawTransaction {
   cleanMerchant: string;
+  accountType: 'Merchant / Business' | 'Personal';
+  theme?: string;
+  themeIcon?: string;
   category: Category;
   tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income';
   isRecurring: boolean;
@@ -63,6 +82,11 @@ export interface EnrichedTransaction extends RawTransaction {
   confidenceScore: number;
   anomalyWarning?: string;
   userOverridden?: boolean;
+  isAmbiguous?: boolean;
+  needsReview?: boolean;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
 }
 
 export interface SubscriptionItem {

@@ -13,6 +13,10 @@ export interface ITransactionDocument extends Document {
   vpaHandle?: string;
   remark?: string;
   cleanMerchant?: string;
+  accountType: 'Merchant / Business' | 'Personal';
+  direction?: 'DEBIT' | 'CREDIT';
+  theme?: string;
+  themeIcon?: string;
   category?: string;
   tier?: string;
   isRecurring?: boolean;
@@ -20,7 +24,14 @@ export interface ITransactionDocument extends Document {
   isRefundOrReversal?: boolean;
   netOutflowAmount?: number;
   userOverridden?: boolean;
+  isAmbiguous?: boolean;
+  needsReview?: boolean;
+  confidenceScore?: number;
+  isUnnecessary?: boolean;
+  unnecessaryReason?: string;
+  spendNature?: 'Need' | 'Want' | 'Unnecessary_Leakage';
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const TransactionSchema: Schema = new Schema(
@@ -36,21 +47,47 @@ const TransactionSchema: Schema = new Schema(
     bankCode: { type: String },
     vpaHandle: { type: String },
     remark: { type: String },
-    cleanMerchant: { type: String },
-    category: { type: String, default: 'Shopping & Discretionary' },
-    tier: { type: String, default: 'Discretionary' },
+    cleanMerchant: { type: String, index: true },
+    accountType: { 
+      type: String, 
+      enum: ['Merchant / Business', 'Personal'], 
+      default: 'Personal', 
+      index: true 
+    },
+    direction: { 
+      type: String, 
+      enum: ['DEBIT', 'CREDIT'], 
+      default: 'DEBIT' 
+    },
+    theme: { type: String, index: true },
+    themeIcon: { type: String },
+    category: { type: String, default: 'Shopping & Discretionary', index: true },
+    tier: { type: String, default: 'Discretionary', index: true },
     isRecurring: { type: Boolean, default: false },
     isInternalTransfer: { type: Boolean, default: false },
     isRefundOrReversal: { type: Boolean, default: false },
     netOutflowAmount: { type: Number },
     userOverridden: { type: Boolean, default: false },
+    isAmbiguous: { type: Boolean, default: false, index: true },
+    needsReview: { type: Boolean, default: false, index: true },
+    confidenceScore: { type: Number, default: 85 },
+    isUnnecessary: { type: Boolean, default: false, index: true },
+    unnecessaryReason: { type: String, default: '' },
+    spendNature: { 
+      type: String, 
+      enum: ['Need', 'Want', 'Unnecessary_Leakage'], 
+      default: 'Need',
+      index: true 
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Prevent duplicate indexing collisions by enforcing unique compound index on RRN + timestamp + amount where RRN exists
+// Helpful compound indexes for MongoDB Compass queries and aggregations
+TransactionSchema.index({ accountType: 1, category: 1 });
+TransactionSchema.index({ accountType: 1, timestamp: -1 });
 TransactionSchema.index({ upiRrn: 1, timestamp: 1, amount: 1 }, { unique: false });
 
 export const TransactionModel =

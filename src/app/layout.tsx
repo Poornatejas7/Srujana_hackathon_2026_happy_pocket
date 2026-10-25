@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Happy Pocket - Smart UPI Banking & Financial Visibility",
-  description: "Seamless UPI payments, expense tracking, bank statement intelligence, and hidden savings with Happy Pocket",
+  description: "Seamless UPI payments, bank statement intelligence, and hidden expense discovery with Happy Pocket",
 };
 
 export const viewport: Viewport = {

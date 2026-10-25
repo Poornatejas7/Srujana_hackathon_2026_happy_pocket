@@ -198,3 +198,138 @@ export function parseBankStatementLines(lines: string[], accountId = 'acc_parsed
 
   return transactions;
 }
+
+/**
+ * Universal CSV Statement Parser for Indian Bank Statements (SBI, HDFC, ICICI, Axis, Canara, etc.)
+ */
+export function parseCSVStatement(csvText: string, accountId = 'acc_parsed_stmt'): RawTransaction[] {
+  const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+
+  // Parse CSV line respecting quoted values with commas
+  const parseLine = (text: string): string[] => {
+    const result: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(cur.trim());
+        cur = '';
+      } else {
+        cur += char;
+      }
+    }
+    result.push(cur.trim());
+    return result;
+  };
+
+  // Detect header row
+  let headerIndex = -1;
+  let headers: string[] = [];
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
+    const row = parseLine(lines[i]).map(c => c.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    if (row.some(c => c.includes('date')) && (
+      row.some(c => c.includes('narration') || c.includes('particular') || c.includes('desc') || c.includes('remark')) ||
+      row.some(c => c.includes('amount') || c.includes('debit') || c.includes('credit') || c.includes('withdrawal'))
+    )) {
+      headerIndex = i;
+      headers = row;
+      break;
+    }
+  }
+
+  let dateCol = headers.findIndex(h => h.includes('date'));
+  let descCol = headers.findIndex(h => h.includes('narration') || h.includes('particular') || h.includes('desc') || h.includes('detail') || h.includes('remark'));
+  let refCol = headers.findIndex(h => h.includes('ref') || h.includes('chq') || h.includes('cheque') || h.includes('rrn') || h.includes('utr'));
+  let debitCol = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal') || h.includes('dr'));
+  let creditCol = headers.findIndex(h => h.includes('credit') || h.includes('deposit') || h.includes('cr'));
+  let amountCol = headers.findIndex(h => h.includes('amount') || h.includes('amt'));
+  let typeCol = headers.findIndex(h => h.includes('type') || h.includes('drcr'));
+
+  if (dateCol === -1) dateCol = 0;
+  if (descCol === -1) descCol = 1;
+
+  const transactions: RawTransaction[] = [];
+  const startRow = headerIndex >= 0 ? headerIndex + 1 : 0;
+
+  for (let i = startRow; i < lines.length; i++) {
+    const cols = parseLine(lines[i]);
+    if (cols.length < 2) continue;
+
+    const rawDate = cols[dateCol] || '';
+    const rawDesc = cols[descCol] || '';
+    if (!rawDesc && !rawDate) continue;
+
+    const dissected = dissectNarration(rawDesc);
+    const rrn = refCol >= 0 && cols[refCol] ? cols[refCol].replace(/[^a-zA-Z0-9]/g, '') : dissected.rrnUtr;
+
+    let finalAmount = 0;
+    if (debitCol >= 0 && creditCol >= 0) {
+      const debitRaw = (cols[debitCol] || '').replace(/[^\d.-]/g, '');
+      const creditRaw = (cols[creditCol] || '').replace(/[^\d.-]/g, '');
+      const debitVal = parseFloat(debitRaw);
+      const creditVal = parseFloat(creditRaw);
+
+      if (!isNaN(creditVal) && creditVal > 0) {
+        finalAmount = creditVal;
+      } else if (!isNaN(debitVal) && debitVal > 0) {
+        finalAmount = -debitVal;
+      }
+    } else if (amountCol >= 0) {
+      const amtRaw = (cols[amountCol] || '').replace(/[^\d.-]/g, '');
+      const amtVal = parseFloat(amtRaw);
+      if (!isNaN(amtVal)) {
+        if (typeCol >= 0) {
+          const typeStr = (cols[typeCol] || '').toUpperCase();
+          finalAmount = typeStr.includes('CR') || typeStr.includes('CREDIT') ? Math.abs(amtVal) : -Math.abs(amtVal);
+        } else {
+          finalAmount = amtVal;
+        }
+      }
+    } else {
+      const nums = cols.map(c => parseFloat(c.replace(/[^\d.-]/g, ''))).filter(n => !isNaN(n) && n > 0);
+      if (nums.length > 0) {
+        const isCredit = dissected.direction === 'CREDIT' || /credit|deposit|cr\b|refund/i.test(rawDesc);
+        finalAmount = isCredit ? nums[0] : -nums[0];
+      }
+    }
+
+    if (finalAmount === 0) continue;
+
+    let txDate = new Date().toISOString();
+    try {
+      const parts = rawDate.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+      if (parts) {
+        const d = parseInt(parts[1], 10);
+        const m = parseInt(parts[2], 10) - 1;
+        const y = parseInt(parts[3].length === 2 ? `20${parts[3]}` : parts[3], 10);
+        const dt = new Date(Date.UTC(y, m, d));
+        if (!isNaN(dt.getTime())) txDate = dt.toISOString();
+      } else {
+        const dt = new Date(rawDate);
+        if (!isNaN(dt.getTime())) txDate = dt.toISOString();
+      }
+    } catch {}
+
+    transactions.push({
+      id: `tx_csv_${Date.now()}_${i}`,
+      accountId,
+      amount: finalAmount,
+      rawDescription: rawDesc || 'Bank Transaction',
+      currency: 'INR',
+      timestamp: txDate,
+      txMode: dissected.txChannel,
+      upiRrn: rrn || `CSV${Date.now()}${i}`,
+      payeeName: dissected.payeeName,
+      bankCode: dissected.bankCode,
+      vpaHandle: dissected.vpa,
+      remark: dissected.userNote || dissected.txChannel,
+    });
+  }
+
+  return transactions;
+}
+

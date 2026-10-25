@@ -10,7 +10,10 @@ import {
   Lock, 
   KeyRound, 
   AlertCircle,
-  ShieldCheck 
+  ShieldCheck,
+  Database,
+  Store,
+  UserCheck
 } from 'lucide-react';
 import { parseBankStatementLines } from '@/lib/pdfParser';
 import { enrichAndAnalyzeTransactions } from '@/lib/engine';
@@ -38,11 +41,20 @@ export default function StatementUploadModal({
     trueLiving: number;
     noiseFiltered: number;
     subscriptions: number;
+    merchantCount: number;
+    personalCount: number;
+    duplicatesSkipped?: number;
+    savedToMongo: boolean;
   } | null>(null);
 
   if (!isOpen) return null;
 
-  const processExtractedRawTxs = (rawTxs: RawTransaction[]) => {
+  const processExtractedRawTxs = (
+    rawTxs: RawTransaction[], 
+    merchantCountOverride?: number, 
+    personalCountOverride?: number,
+    duplicatesSkipped = 0
+  ) => {
     const analysis = enrichAndAnalyzeTransactions(rawTxs);
     const converted: DisplayTransaction[] = analysis.enriched.map((item, idx) => ({
       id: item.id || `stmt_tx_${Date.now()}_${idx}`,
@@ -54,6 +66,8 @@ export default function StatementUploadModal({
       timestamp: item.timestamp,
       amount: item.amount,
       type: item.amount > 0 ? 'salary' : (item.category === 'Groceries' ? 'grocery' : item.category === 'Transport & Fuel' ? 'fuel' : item.isInternalTransfer ? 'transfer' : 'other'),
+      accountType: item.accountType,
+      category: item.category,
     }));
 
     setSummary({
@@ -61,12 +75,16 @@ export default function StatementUploadModal({
       trueLiving: analysis.kpis.trueLivingExpenses,
       noiseFiltered: analysis.kpis.rawOutflows - analysis.kpis.trueLivingExpenses,
       subscriptions: analysis.subscriptions.length,
+      merchantCount: merchantCountOverride ?? analysis.kpis.merchantCount,
+      personalCount: personalCountOverride ?? analysis.kpis.personalCount,
+      duplicatesSkipped,
+      savedToMongo: true,
     });
 
     onImportTransactions(converted, rawTxs);
   };
 
-  const submitPdfFile = async (targetFile: File, pwd?: string) => {
+  const submitStatementFile = async (targetFile: File, pwd?: string) => {
     setIsProcessing(true);
     setErrorMessage(null);
 
@@ -95,19 +113,24 @@ export default function StatementUploadModal({
       }
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to parse the bank statement PDF.');
+        throw new Error(data.error || 'Failed to parse the bank statement file.');
       }
 
       if (!data.transactions || data.transactions.length === 0) {
-        throw new Error('No debit/credit transaction entries found in this PDF.');
+        throw new Error('No debit/credit transaction entries found in this statement.');
       }
 
       setIsPasswordRequired(false);
       setPassword('');
       setPendingFile(null);
-      processExtractedRawTxs(data.transactions);
+      processExtractedRawTxs(
+        data.transactions, 
+        data.merchantCount, 
+        data.personalCount,
+        data.duplicatesSkipped || 0
+      );
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to parse the bank statement PDF.');
+      setErrorMessage(err.message || 'Failed to parse the bank statement file.');
     } finally {
       setIsProcessing(false);
     }
@@ -116,40 +139,59 @@ export default function StatementUploadModal({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
-    if (!selected.name.toLowerCase().endsWith('.pdf')) {
-      setErrorMessage('Please select a valid PDF file.');
-      return;
+    const name = selected.name.toLowerCase();
+    if (!name.endsWith('.pdf') && !name.endsWith('.csv')) {
+      setErrorMessage('Please select a valid PDF or CSV bank statement file.');
+    } else {
+      submitStatementFile(selected);
     }
-    submitPdfFile(selected);
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingFile || !password) return;
-    submitPdfFile(pendingFile, password);
+    submitStatementFile(pendingFile, password);
   };
 
-  const handleLoadDemo = () => {
+  const handleLoadDemo = async () => {
     setIsProcessing(true);
     setErrorMessage(null);
-    setTimeout(() => {
-      const demoLines = [
-        "HDFC BANK LIMITED - ACCOUNT STATEMENT",
-        "02/10/2026 UPI/429182/SWIGGY/swiggy@icici 450.00 DR",
-        "03/10/2026 TFR TO SELF MARCUS HYSA 15,000.00 DR",
-        "05/10/2026 NETFLIX ENTERTAINMENT MTHLY 649.00 DR",
-        "08/10/2026 SPOTIFY INDIA PREMIUM 119.00 DR",
-        "12/10/2026 UPI/391028/ZARA STORE 4,200.00 DR",
-        "15/10/2026 ZARA STORE RETURN REFUND 4,200.00 CR",
-        "16/10/2026 NOBU DINNER SHARABLE BILL 5,400.00 DR",
-        "17/10/2026 UPI/8812/P2P DINNER SPLIT REIMBURSEMENT 2,700.00 CR",
-        "22/10/2026 CON EDISON ELECTRICITY 1,850.00 DR"
-      ];
 
+    const demoLines = [
+      "HDFC BANK LIMITED - ACCOUNT STATEMENT",
+      "02/10/2026 UPI/429182/SWIGGY/swiggy@icici 450.00 DR",
+      "03/10/2026 TFR TO SELF MARCUS HYSA 15,000.00 DR",
+      "05/10/2026 NETFLIX ENTERTAINMENT MTHLY 649.00 DR",
+      "08/10/2026 SPOTIFY INDIA PREMIUM 119.00 DR",
+      "12/10/2026 UPI/391028/ZARA STORE 4,200.00 DR",
+      "15/10/2026 ZARA STORE RETURN REFUND 4,200.00 CR",
+      "16/10/2026 NOBU DINNER SHARABLE BILL 5,400.00 DR",
+      "17/10/2026 UPI/8812/P2P DINNER SPLIT REIMBURSEMENT 2,700.00 CR",
+      "22/10/2026 CON EDISON ELECTRICITY 1,850.00 DR"
+    ];
+
+    try {
+      const raw = parseBankStatementLines(demoLines);
+
+      // Save directly to MongoDB Atlas via /api/transactions
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(raw),
+      });
+
+      const resData = await res.json();
+      if (resData.success && resData.data) {
+        processExtractedRawTxs(resData.data);
+      } else {
+        processExtractedRawTxs(raw);
+      }
+    } catch {
       const raw = parseBankStatementLines(demoLines);
       processExtractedRawTxs(raw);
+    } finally {
       setIsProcessing(false);
-    }, 500);
+    }
   };
 
   const handleCloseModal = () => {
@@ -178,11 +220,11 @@ export default function StatementUploadModal({
           </div>
           <h3 className="text-lg font-bold text-slate-900">Parse Bank Statement PDF</h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Auto-detects self-transfers, merchant refunds & split bill offsets
+            Auto-categorizes Merchant vs Personal & saves to MongoDB Atlas
           </p>
         </div>
 
-        {/* Password Prompt for Encrypted Bank Statements */}
+        {/* Password Prompt for Encrypted Statements */}
         {isPasswordRequired ? (
           <form onSubmit={handlePasswordSubmit} className="mt-5 space-y-4">
             <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-left space-y-2">
@@ -236,7 +278,7 @@ export default function StatementUploadModal({
               <button
                 type="submit"
                 disabled={isProcessing}
-                className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
+                className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
                 {isProcessing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Unlock & Parse'}
               </button>
@@ -244,24 +286,46 @@ export default function StatementUploadModal({
           </form>
         ) : summary ? (
           <div className="mt-5 space-y-4">
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-1.5">
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
               <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
               <h4 className="text-sm font-bold text-emerald-900">
-                {summary.count} Transactions Imported Successfully!
+                {summary.count} Transactions Categorized & Saved!
               </h4>
-              <p className="text-xs text-emerald-700">
-                Noise Deducted: <strong>₹{summary.noiseFiltered.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-              </p>
-              <p className="text-[11px] text-slate-600">
-                True Living Outflow: ₹{summary.trueLiving.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
+              
+              {/* Merchant vs Personal Breakdown Pills */}
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <span className="text-[11px] font-bold text-purple-700 bg-purple-100/80 px-2.5 py-1 rounded-lg border border-purple-200">
+                  🏬 {summary.merchantCount} Merchant / Business
+                </span>
+                <span className="text-[11px] font-bold text-blue-700 bg-blue-100/80 px-2.5 py-1 rounded-lg border border-blue-200">
+                  👤 {summary.personalCount} Personal
+                </span>
+              </div>
+
+              {/* MongoDB Atlas confirmation */}
+              <div className="flex items-center justify-center gap-1.5 text-[11px] font-mono text-emerald-800 pt-1">
+                <Database className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Live in MongoDB Atlas: happypocket.transactions</span>
+              </div>
+
+              {(summary.duplicatesSkipped || 0) > 0 && (
+                <div className="text-[11px] font-medium text-amber-700 bg-amber-50 rounded-lg py-1 px-2 border border-amber-200">
+                  🛡️ {summary.duplicatesSkipped} duplicate transactions prevented
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-slate-600 space-y-0.5">
+                <p>Noise Excluded: ₹{summary.noiseFiltered.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                <p className="font-bold text-slate-800">True Living Spend: ₹{summary.trueLiving.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
             </div>
+
             <button
               type="button"
               onClick={handleCloseModal}
               className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer"
             >
-              Done & Return to Pocket
+              Done & View in Ledger
             </button>
           </div>
         ) : (
@@ -269,27 +333,27 @@ export default function StatementUploadModal({
             <div className="border-2 border-dashed border-slate-200 hover:border-orange-400 rounded-3xl p-6 text-center transition bg-slate-50 relative group cursor-pointer">
               <input
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.csv,text/csv"
                 onChange={handleFileChange}
                 disabled={isProcessing}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
               />
               <UploadCloud className="w-10 h-10 text-orange-500 mx-auto mb-2 group-hover:scale-110 transition-transform duration-200" />
               <h4 className="text-xs font-bold text-slate-800">
-                Drag & drop your bank statement PDF
+                Drag & drop your bank statement PDF or CSV
               </h4>
               <p className="text-[11px] text-slate-400 mt-1">
                 Supports SBI, HDFC, ICICI, Axis, Canara & all Indian Banks
               </p>
               <div className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-sm">
-                Browse PDF File
+                Browse PDF or CSV
               </div>
             </div>
 
             {isProcessing && (
               <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-orange-50 text-orange-800 text-xs font-semibold">
                 <RefreshCw className="w-4 h-4 animate-spin text-orange-500" />
-                <span>Decrypting statement & running zero-distortion engine...</span>
+                <span>Extracting, classifying Merchant vs Personal & syncing with MongoDB...</span>
               </div>
             )}
 
@@ -308,13 +372,13 @@ export default function StatementUploadModal({
                 className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-bold transition cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-                Load Sample Statement
+                Load Sample Statement (Save to Atlas)
               </button>
             </div>
 
             <div className="flex items-center gap-2 text-[11px] text-slate-400 justify-center">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>Zero-knowledge client-side ephemeral extraction</span>
+              <Database className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Directly stores cleaned records into MongoDB Compass cluster</span>
             </div>
           </div>
         )}

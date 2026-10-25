@@ -1,16 +1,7 @@
 'use client';
 
 import React from 'react';
-import { 
-  Home, 
-  CreditCard, 
-  Lightbulb, 
-  User, 
-  Repeat, 
-  Bot, 
-  ReceiptIndianRupee, 
-  Layers 
-} from 'lucide-react';
+import { Home, CreditCard, User, Lightbulb } from 'lucide-react';
 
 export type NavTab = 
   | 'home' 
@@ -86,7 +77,7 @@ export default function BottomNav({
     >
       <div className="flex items-center justify-between max-w-md mx-auto">
         {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
+          const isActive = activeTab === tab.id || (tab.id === 'insights' && (activeTab === 'subscriptions' || activeTab === 'advisor' || activeTab === 'tax' || activeTab === 'wealth'));
           const Icon = tab.icon;
 
           return (
@@ -119,7 +110,7 @@ export default function BottomNav({
               </div>
 
               <span
-                className={`text-[10px] sm:text-[11px] tracking-tight mt-1 transition-colors duration-200 text-center truncate max-w-[70px] ${
+                className={`text-[10px] tracking-tight mt-1 transition-colors duration-200 text-center truncate max-w-[70px] ${
                   isActive
                     ? 'font-bold text-[#F97316]'
                     : 'font-medium text-slate-500 group-hover:text-slate-700'
@@ -128,7 +119,7 @@ export default function BottomNav({
                 {tab.label}
               </span>
 
-              {/* Active Indicator Underline */}
+              {/* Active Indicator Underline matching screenshot */}
               <div className="h-1 mt-1 flex items-center justify-center">
                 {isActive ? (
                   <div className="w-6 h-[3px] bg-[#F97316] rounded-full" />

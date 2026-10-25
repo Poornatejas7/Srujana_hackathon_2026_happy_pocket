@@ -83,7 +83,7 @@ export default function PaymentsTab({ onScanClick, onSendClick }: PaymentsTabPro
               HDFC
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-900 block">HDFC Bank •••• 5274</span>
+              <span className="text-xs font-bold text-slate-900 block">HDFC Bank •••• 7482</span>
               <span className="text-[10px] text-slate-400 font-mono">Primary UPI Account</span>
             </div>
           </div>
