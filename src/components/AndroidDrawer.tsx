@@ -110,8 +110,8 @@ export default function AndroidDrawer({
         },
         {
           id: 'insights',
-          label: 'AI Wealth Advisor',
-          subtext: 'Impulse Leakage & AMFI SIP Compounder',
+          label: 'Financial Insights & Savings',
+          subtext: 'AutoPay, Discretionary Spend & Investment Sandbox',
           icon: Lightbulb,
           color: 'text-amber-600 bg-amber-50 border-amber-200',
           action: () => {
@@ -119,7 +119,7 @@ export default function AndroidDrawer({
             onClose();
           },
           isActive: activeTab === 'insights',
-          badge: 'AI Smart',
+          badge: 'Smart Insights',
         },
         {
           id: 'payments',

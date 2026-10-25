@@ -779,7 +779,7 @@ export default function HappyPocketApp() {
                     {/* Center: Dynamic Screen Title if not Home */}
                     {activeTab !== 'home' && (
                       <h2 className="text-sm font-extrabold text-slate-900 tracking-tight capitalize truncate max-w-[130px]">
-                        {activeTab === 'expense' ? 'Expenses' : activeTab === 'insights' ? 'AI Advisor' : activeTab}
+                        {activeTab === 'expense' ? 'Expenses' : activeTab === 'insights' ? 'Smart Insights' : activeTab}
                       </h2>
                     )}
 
