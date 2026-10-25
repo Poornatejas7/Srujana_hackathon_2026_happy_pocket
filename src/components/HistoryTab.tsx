@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Filter, ArrowDownLeft, ArrowUpRight, FileUp, Store, User, Database, AlertTriangle, Tag } from 'lucide-react';
+import { Search, Filter, ArrowDownLeft, ArrowUpRight, FileUp, Store, User, Database, AlertTriangle, Tag, Landmark } from 'lucide-react';
 import { DisplayTransaction } from './RecentTransactions';
 
 interface HistoryTabProps {
   transactions: DisplayTransaction[];
   onOpenUpload: () => void;
+  onOpenAccountAggregator?: () => void;
   onClassifyMerchant?: (merchantName: string, currentCategory?: string) => void;
 }
 
-export default function HistoryTab({ transactions, onOpenUpload, onClassifyMerchant }: HistoryTabProps) {
+export default function HistoryTab({ transactions, onOpenUpload, onOpenAccountAggregator, onClassifyMerchant }: HistoryTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'merchant' | 'personal' | 'outflow' | 'inflow'>('all');
 
@@ -45,6 +46,18 @@ export default function HistoryTab({ transactions, onOpenUpload, onClassifyMerch
             className="w-full pl-9 pr-3.5 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500 shadow-sm"
           />
         </div>
+
+        {onOpenAccountAggregator && (
+          <button
+            type="button"
+            onClick={onOpenAccountAggregator}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition shadow-sm shrink-0 cursor-pointer"
+            title="Connect Bank via RBI Account Aggregator"
+          >
+            <Landmark className="w-3.5 h-3.5" />
+            <span>Sync AA</span>
+          </button>
+        )}
 
         <button
           type="button"

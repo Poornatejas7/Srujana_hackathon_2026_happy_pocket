@@ -24,11 +24,13 @@ import {
   Smartphone,
   SlidersHorizontal,
   Sparkles,
-  Maximize2
+  Maximize2,
+  Landmark
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
 import ActionButtons from '@/components/ActionButtons';
+import AccountAggregatorModal from '@/components/AccountAggregatorModal';
 import RecentTransactions, { 
   DisplayTransaction, 
   DEFAULT_RECENT_TRANSACTIONS 
@@ -67,6 +69,7 @@ export default function HappyPocketApp() {
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [isSendOpen, setIsSendOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isAaOpen, setIsAaOpen] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [classifierModalState, setClassifierModalState] = useState<{
     isOpen: boolean;
@@ -871,6 +874,29 @@ export default function HappyPocketApp() {
                           onTransactionsClick={handleTransactionsClick}
                         />
 
+                        {/* Live RBI Account Aggregator Quick Connect Banner */}
+                        <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white shadow-sm border border-emerald-500/30 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center shrink-0">
+                              <Landmark className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-white">Live RBI Account Aggregator</span>
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold bg-emerald-500/30 text-emerald-300 rounded border border-emerald-400/30">ReBIT</span>
+                              </div>
+                              <p className="text-[10px] text-emerald-200/80">Consent-based live bank statements & real balances</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsAaOpen(true)}
+                            className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-[11px] shadow transition cursor-pointer shrink-0"
+                          >
+                            Link Bank
+                          </button>
+                        </div>
+
                         {/* Quick Atlas Sync Chip */}
                         <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200/80 shadow-xs text-xs">
                           <div className="flex items-center gap-2">
@@ -932,6 +958,7 @@ export default function HappyPocketApp() {
                         <HistoryTab
                           transactions={transactions}
                           onOpenUpload={() => setIsUploadOpen(true)}
+                          onOpenAccountAggregator={() => setIsAaOpen(true)}
                           onClassifyMerchant={handleOpenClassifier}
                         />
                       </div>
@@ -1018,6 +1045,7 @@ export default function HappyPocketApp() {
                     onOpenScanPay={() => setIsScanOpen(true)}
                     onOpenSendMoney={() => setIsSendOpen(true)}
                     onOpenUploadStatement={() => setIsUploadOpen(true)}
+                    onOpenAccountAggregator={() => setIsAaOpen(true)}
                     onOpenMyQr={() => setIsQrOpen(true)}
                     onRefreshData={loadFromDb}
                     onLogout={handleLogout}
@@ -1147,6 +1175,15 @@ export default function HappyPocketApp() {
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onImportTransactions={handleImportedTransactions}
+      />
+
+      <AccountAggregatorModal
+        isOpen={isAaOpen}
+        onClose={() => setIsAaOpen(false)}
+        onSuccess={async (newBalance, count) => {
+          await loadFromDb();
+          showToast(`🏛️ Linked Bank via RBI Account Aggregator! Synced ${count} verified records.`);
+        }}
       />
 
       <MyQrModal

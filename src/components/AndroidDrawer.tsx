@@ -18,7 +18,8 @@ import {
   Sparkles,
   ChevronRight,
   TrendingUp,
-  Receipt
+  Receipt,
+  Landmark
 } from 'lucide-react';
 import { NavTab } from './BottomNav';
 
@@ -30,6 +31,7 @@ interface AndroidDrawerProps {
   onOpenScanPay: () => void;
   onOpenSendMoney: () => void;
   onOpenUploadStatement: () => void;
+  onOpenAccountAggregator?: () => void;
   onOpenMyQr: () => void;
   onRefreshData: () => void;
   onLogout: () => void;
@@ -60,6 +62,7 @@ export default function AndroidDrawer({
   onOpenScanPay,
   onOpenSendMoney,
   onOpenUploadStatement,
+  onOpenAccountAggregator,
   onOpenMyQr,
   onRefreshData,
   onLogout,
@@ -182,6 +185,18 @@ export default function AndroidDrawer({
             onOpenUploadStatement();
           },
           badge: 'PDF / CSV',
+        },
+        {
+          id: 'account_aggregator',
+          label: 'Live RBI Account Aggregator',
+          subtext: 'Direct OTP Consent & Bank Sync',
+          icon: Landmark,
+          color: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+          action: () => {
+            onClose();
+            onOpenAccountAggregator?.();
+          },
+          badge: 'RBI Consent',
         },
       ],
     },
