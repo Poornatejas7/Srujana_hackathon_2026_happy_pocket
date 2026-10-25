@@ -46,11 +46,11 @@ export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [
 ];
 
 export default function RecentTransactions({
-  transactions = DEFAULT_RECENT_TRANSACTIONS,
+  transactions = [],
   onViewAll,
   onTransactionClick,
 }: RecentTransactionsProps) {
-  const displayItems = transactions && transactions.length > 0 ? transactions : DEFAULT_RECENT_TRANSACTIONS;
+  const displayItems = transactions || [];
 
   return (
     <div className="w-full rounded-[26px] sm:rounded-[30px] bg-white p-4 sm:p-6 shadow-[0_4px_24px_rgba(15,23,42,0.04)] border border-slate-100/90">

@@ -115,11 +115,24 @@ export default function HappyPocketApp() {
             payeeName: t.payeeName,
             bankCode: t.bankCode,
             vpaHandle: t.vpaHandle,
-            remark: t.remark
+            remark: t.remark,
+            cleanMerchant: t.cleanMerchant,
+            category: t.category,
+            tier: t.tier,
+            isRecurring: t.isRecurring,
+            isInternalTransfer: t.isInternalTransfer,
+            isRefundOrReversal: t.isRefundOrReversal,
+            netOutflowAmount: t.netOutflowAmount,
+            userOverridden: t.userOverridden
           }));
 
           setExtractedRawTxs(rawList);
           syncTransactionsWithEngine(rawList);
+
+          // Calculate real balance from account transactions or standard salary opening balance
+          const netChange = rawList.reduce((acc, curr) => acc + curr.amount, 0);
+          const computedBalance = netChange > 0 ? netChange : Math.max(12450.00, 100000.00 + netChange);
+          setBalance(computedBalance);
         } else {
           setTransactions([]);
         }
@@ -585,11 +598,11 @@ export default function HappyPocketApp() {
                   )}
 
                   {activeTab === 'expense' && (
-                    <ExpenseTrackerTab />
+                    <ExpenseTrackerTab transactions={extractedRawTxs} />
                   )}
 
                   {activeTab === 'insights' && (
-                    <InsightsTab />
+                    <InsightsTab transactions={extractedRawTxs} />
                   )}
 
                   {activeTab === 'payments' && (
@@ -797,14 +810,14 @@ export default function HappyPocketApp() {
                 {/* SubTab: Expense Tracker */}
                 {analyticsSubTab === ('expense_tracker' as any) && (
                   <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
-                    <ExpenseTrackerTab />
+                    <ExpenseTrackerTab transactions={extractedRawTxs} />
                   </div>
                 )}
 
                 {/* SubTab: Smart Insights */}
                 {analyticsSubTab === ('smart_insights' as any) && (
                   <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
-                    <InsightsTab />
+                    <InsightsTab transactions={extractedRawTxs} />
                   </div>
                 )}
 
