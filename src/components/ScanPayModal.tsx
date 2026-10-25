@@ -212,7 +212,7 @@ export default function ScanPayModal({
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Core Banking Connected • 5 Verified Merchant Accounts
+                Core Banking Connected • Dynamic UPI Scanner
               </p>
             </div>
           </div>
@@ -353,42 +353,18 @@ export default function ScanPayModal({
                 </div>
               </div>
 
-              {/* Verified Receiver Merchant Accounts in Bank Database */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    5 Verified Merchant Bank Accounts
-                  </span>
-                  <span className="text-[10px] text-emerald-400 font-mono font-medium">Bank Database Linked</span>
+              {/* Clean Empty State awaiting user entry if no merchant is entered */}
+              {!activeMerchantInfo && (
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-2">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-400 mx-auto flex items-center justify-center">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs font-bold text-white">No merchant selected</p>
+                  <p className="text-[11px] text-slate-400 max-w-[280px] mx-auto leading-relaxed">
+                    Type any store or merchant name above (e.g. <em>Lakshmi Traders</em>, <em>Iyengar Bakery</em>, <em>Amazon</em>, etc.) to scan and record a payment.
+                  </p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin">
-                  {PRESET_MERCHANT_ACCOUNTS.map((m) => {
-                    const isSelected = !customQrInput && selectedMerchant?.id === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => handleSelectPreset(m)}
-                        className={`p-2.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
-                            ? 'bg-orange-500/15 border-orange-500 text-white shadow-sm'
-                            : 'bg-slate-850/80 hover:bg-slate-800 border-slate-800 text-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-base shrink-0">{m.themeIcon}</span>
-                          <span className="font-bold text-xs truncate text-white">{m.name}</span>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between text-[10px]">
-                          <span className="text-slate-400 truncate max-w-[95px]">{m.category}</span>
-                          <span className="text-orange-400 font-semibold shrink-0">₹{m.defaultAmount}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              )}
 
               {/* Debiting Bank Account Info & Amount Input */}
               <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">

@@ -20,6 +20,8 @@ export interface DisplayTransaction {
   needsReview?: boolean;
   userOverridden?: boolean;
   confidenceScore?: number;
+  isRecurringAutoPay?: boolean;
+  isInternalTransfer?: boolean;
 }
 
 export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [];

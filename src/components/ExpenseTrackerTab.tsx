@@ -662,7 +662,11 @@ export default function ExpenseTrackerTab({
           </div>
 
           <p className="text-[11px] text-slate-500 font-medium mt-1.5">
-            Gross Bank Debits: <span className="line-through text-slate-400">₹{realWorldMetrics.grossOutflow.toLocaleString('en-IN')}</span> (₹{realWorldMetrics.selfTransfers.toLocaleString('en-IN')} self-transfers excluded)
+            {realWorldMetrics.grossOutflow > 0 ? (
+              <>Gross Bank Debits: <span className="line-through text-slate-400">₹{realWorldMetrics.grossOutflow.toLocaleString('en-IN')}</span> (₹{realWorldMetrics.selfTransfers.toLocaleString('en-IN')} self-transfers excluded)</>
+            ) : (
+              <>No expenses recorded yet • Ledger is clean</>
+            )}
           </p>
 
           <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -779,11 +783,11 @@ export default function ExpenseTrackerTab({
                 <span className="font-bold text-slate-900">₹{realWorldMetrics.grossOutflow.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-blue-50/70 border border-blue-100 text-blue-900">
-                <span className="font-sans">(-) Own Bank Account Transfers (Canara A/C)</span>
+                <span className="font-sans">(-) Own Bank Account Transfers</span>
                 <span className="font-bold">-₹{realWorldMetrics.selfTransfers.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-indigo-50/70 border border-indigo-100 text-indigo-900">
-                <span className="font-sans">(-) Shared Rent &amp; Colleague Lunch Reimbursements</span>
+                <span className="font-sans">(-) Personal &amp; Shared Reimbursements</span>
                 <span className="font-bold">-₹{realWorldMetrics.personalReimbursements.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-950 font-bold">

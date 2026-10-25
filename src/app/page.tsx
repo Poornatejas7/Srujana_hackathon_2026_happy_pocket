@@ -214,6 +214,8 @@ export default function HappyPocketApp() {
           needsReview: item.needsReview,
           confidenceScore: item.confidenceScore,
           userOverridden: item.userOverridden,
+          isRecurringAutoPay: item.isRecurringAutoPay,
+          isInternalTransfer: item.isInternalTransfer,
         }));
 
         if (converted.length > 0) {
@@ -910,7 +912,7 @@ export default function HappyPocketApp() {
                     {/* TAB 3: SMART INSIGHTS & AI WEALTH ADVISOR */}
                     {activeTab === 'insights' && (
                       <div className="pb-2">
-                        <InsightsTab />
+                        <InsightsTab transactions={transactions} />
                       </div>
                     )}
 

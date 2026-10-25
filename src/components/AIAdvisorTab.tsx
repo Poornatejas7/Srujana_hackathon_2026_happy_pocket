@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Bot, 
   Send, 
@@ -31,10 +31,19 @@ export default function AIAdvisorTab({
   onExploreTax,
 }: AIAdvisorTabProps) {
   const [showRecommender, setShowRecommender] = useState<boolean>(true);
-  const [messages, setMessages] = useState<Array<{ sender: 'ai' | 'user'; text: string; time: string }>>([
+  const initialGreeting = useMemo(() => {
+    if (rawOutflows > 0) {
+      return `Namaste! I'm your Happy Pocket AI. I analyzed your bank feed: you had ₹${rawOutflows.toLocaleString('en-IN')} in total statement activity, with ₹${trueLivingExpenses.toLocaleString('en-IN')} in true living expenses (₹${noiseDeducted.toLocaleString('en-IN')} non-expense transfers filtered out). Where would you like to save next?`;
+    }
+    return `Namaste! I'm your Happy Pocket AI. Your ledger is currently clean and empty. As you make UPI payments, scan QR codes, or import transactions, I will analyze your true living expenses and highlight leaks in real time. How can I assist you today?`;
+  }, [rawOutflows, trueLivingExpenses, noiseDeducted]);
+
+  const [messages, setMessages] = useState<Array<{ sender: 'ai' | 'user'; text: string; time: string }>>(() => [
     {
       sender: 'ai',
-      text: `Namaste! I'm your Happy Pocket AI. I analyzed your bank feed: you had ₹${rawOutflows.toLocaleString('en-IN')} in total statement activity, but ₹${noiseDeducted.toLocaleString('en-IN')} was just noise (self-transfers and Meesho return refunds). Your actual living outflow is ₹${trueLivingExpenses.toLocaleString('en-IN')}. Where would you like to save next?`,
+      text: rawOutflows > 0 
+        ? `Namaste! I'm your Happy Pocket AI. I analyzed your bank feed: you had ₹${rawOutflows.toLocaleString('en-IN')} in total statement activity, with ₹${trueLivingExpenses.toLocaleString('en-IN')} in true living expenses. Where would you like to save next?`
+        : `Namaste! I'm your Happy Pocket AI. Your ledger is currently clean and empty. As you make UPI payments, scan QR codes, or import transactions, I will analyze your true living expenses and highlight leaks in real time. How can I assist you today?`,
       time: 'Just now',
     },
   ]);
@@ -59,17 +68,32 @@ export default function AIAdvisorTab({
     let reply = '';
     const q = text.toLowerCase();
 
-    if (q.includes('sip') || q.includes('insurance') || q.includes('reclaim')) {
-      setShowRecommender(true);
-      reply = `I converted your leaks into live recommendations: Routing 65% into UTI Nifty 50 & Parag Parikh Flexi Cap and 35% into ₹1 Cr Term Life + ₹15L Health cover. This creates ₹1.45L+ wealth in 5 years and saves ₹3,360/yr in taxes! See the interactive card below.`;
-    } else if (q.includes('leak') || q.includes('spending') || q.includes('food')) {
-      reply = `You spent ₹4,200 on dining & food delivery (Swiggy/Zomato) and ₹${monthlyCommitments.toLocaleString('en-IN')} on digital subscriptions (Netflix, Google Play AutoPay). Cutting food delivery frequency twice a week will save ₹1,400/month (₹16,800/year)!`;
-    } else if (q.includes('sub') || q.includes('netflix') || q.includes('zombie')) {
-      reply = `I found 2 active AutoPay mandates: Netflix India (₹649/mo) and Spotify (₹119/mo). If you pause the unused entertainment tier, you instantly retain ₹9,216 annually in disposable income.`;
-    } else if (q.includes('tax') || q.includes('80c') || q.includes('deduct')) {
-      reply = `I discovered eligible tax deductions: ₹1,50,000 Section 80C limit (EPF/ELSS), ₹25,000 Section 80D (Health Insurance), and ₹50,000 Section 80CCD(1B) (NPS). Check our Tax Finder tab to download the breakdown!`;
+    if (rawOutflows === 0) {
+      if (q.includes('sip') || q.includes('insurance') || q.includes('invest')) {
+        setShowRecommender(true);
+        reply = `Your spending ledger is currently empty. However, you can use the live Wealth Simulator below to see how allocating any monthly surplus into Nifty 50 Index funds and Health cover compounds over 5 years!`;
+      } else if (q.includes('leak') || q.includes('spending') || q.includes('food')) {
+        reply = `You haven't recorded any expenses yet! Once you start using Scan & Pay or Send Money, I will monitor your velocity and highlight any impulse dining or shopping leaks.`;
+      } else if (q.includes('sub') || q.includes('zombie') || q.includes('netflix')) {
+        reply = `No recurring subscriptions found in your ledger yet. As soon as auto-debits occur, I will detect them and show you alternatives.`;
+      } else if (q.includes('tax') || q.includes('80c') || q.includes('deduct')) {
+        reply = `I can help you claim tax deductions: up to ₹1.5L under Section 80C (ELSS/EPF), ₹25K under Section 80D (Health Insurance), and ₹50K under 80CCD(1B) (NPS).`;
+      } else {
+        reply = `Your account is ready. Record a transaction with Scan & Pay or Send Money to see live AI insights!`;
+      }
     } else {
-      reply = `Based on your zero-distortion ledger: your savings rate is healthy at ~58%. To maximize compounding, consider diverting ₹5,000/month of filtered surplus into an index SIP yielding 12% CAGR.`;
+      if (q.includes('sip') || q.includes('insurance') || q.includes('reclaim')) {
+        setShowRecommender(true);
+        reply = `I converted your leaks into live recommendations: Routing filtered surplus into UTI Nifty 50 & Parag Parikh Flexi Cap, plus Term Life cover. See the interactive simulator below.`;
+      } else if (q.includes('leak') || q.includes('spending') || q.includes('food')) {
+        reply = `Your net living expenditure is ₹${trueLivingExpenses.toLocaleString('en-IN')}. Check the Expense Tracker tab to see category velocity!`;
+      } else if (q.includes('sub') || q.includes('zombie')) {
+        reply = `Your recurring commitments currently total ₹${monthlyCommitments.toLocaleString('en-IN')}/month. Check the Insights tab for auto-pay details.`;
+      } else if (q.includes('tax') || q.includes('80c') || q.includes('deduct')) {
+        reply = `Eligible deductions: ₹1,50,000 Section 80C limit (EPF/ELSS), ₹25,000 Section 80D (Health Insurance), and ₹50,000 Section 80CCD(1B) (NPS).`;
+      } else {
+        reply = `Based on your zero-distortion ledger: your net living outflow is ₹${trueLivingExpenses.toLocaleString('en-IN')}.`;
+      }
     }
 
     const aiMsg = {

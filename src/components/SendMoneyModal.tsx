@@ -15,7 +15,7 @@ import {
   Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { PRESET_PERSONAL_ACCOUNTS, inferMerchantTheme, SimulatedAccount } from '@/lib/engine';
+import { inferMerchantTheme } from '@/lib/engine';
 
 interface SendMoneyModalProps {
   isOpen: boolean;
@@ -30,7 +30,6 @@ export default function SendMoneyModal({
   balance = 10000.00,
   onSendSuccess,
 }: SendMoneyModalProps) {
-  const [selectedContact, setSelectedContact] = useState<SimulatedAccount>(PRESET_PERSONAL_ACCOUNTS[0]);
   const [customRecipient, setCustomRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -45,7 +44,7 @@ export default function SendMoneyModal({
     recipient?: string;
   } | null>(null);
 
-  // Dynamic inference for custom recipient or contact
+  // Dynamic inference for custom recipient
   const dynamicInference = useMemo(() => {
     if (customRecipient.trim()) {
       return inferMerchantTheme(customRecipient.trim());
@@ -65,19 +64,17 @@ export default function SendMoneyModal({
         accountType: dynamicInference.accountType,
       };
     }
-    return selectedContact;
-  }, [customRecipient, dynamicInference, selectedContact]);
+    return null;
+  }, [customRecipient, dynamicInference]);
 
   if (!isOpen) return null;
 
-  const handleSelectContact = (acc: SimulatedAccount) => {
-    setCustomRecipient('');
-    setSelectedContact(acc);
-    setAmount(acc.defaultAmount.toString());
-    setErrorMessage(null);
-  };
-
   const handleSend = async () => {
+    if (!activeRecipient) {
+      setErrorMessage('Please enter a recipient name or UPI ID');
+      return;
+    }
+
     const num = parseFloat(amount);
     if (isNaN(num) || num <= 0) {
       setErrorMessage('Please enter a valid amount');
@@ -205,33 +202,14 @@ export default function SendMoneyModal({
           </div>
         ) : (
           <div className="mt-4 space-y-4 overflow-y-auto flex-1 pr-1">
-            {/* Beneficiary Preview */}
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-lg shrink-0">
-                {activeRecipient.themeIcon || '👤'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <h4 className="text-xs font-bold text-slate-900 truncate">
-                    {activeRecipient.name}
-                  </h4>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                </div>
-                <p className="text-[10px] text-slate-500 font-mono truncate">{activeRecipient.vpa}</p>
-              </div>
-              <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full shrink-0">
-                {activeRecipient.category}
-              </span>
-            </div>
-
             {/* Custom VPA Input */}
             <div>
               <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Enter Any Name or UPI ID
+                Enter Recipient Name or UPI ID
               </label>
               <input
                 type="text"
-                placeholder="e.g. Rahul, rahul@oksbi..."
+                placeholder="e.g. Rahul, Priya, friend@oksbi..."
                 value={customRecipient}
                 onChange={(e) => {
                   setCustomRecipient(e.target.value);
@@ -241,33 +219,36 @@ export default function SendMoneyModal({
               />
             </div>
 
-            {/* Contacts Pill Row */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-slate-600">Frequent Accounts</span>
-                <span className="text-[10px] text-slate-400 font-mono">P2P Verified</span>
+            {/* Beneficiary Preview */}
+            {activeRecipient ? (
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3 animate-fadeIn">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-lg shrink-0">
+                  {activeRecipient.themeIcon || '👤'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-slate-900 truncate">
+                      {activeRecipient.name}
+                    </h4>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-mono truncate">{activeRecipient.vpa}</p>
+                </div>
+                <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full shrink-0">
+                  {activeRecipient.category}
+                </span>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {PRESET_PERSONAL_ACCOUNTS.map((acc) => {
-                  const isSelected = !customRecipient && selectedContact.id === acc.id;
-                  return (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      onClick={() => handleSelectContact(acc)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 border shrink-0 ${
-                        isSelected
-                          ? 'bg-orange-50 border-orange-500 text-orange-600 font-bold'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>{acc.themeIcon}</span>
-                      <span>{acc.name.split(' ')[0]}</span>
-                    </button>
-                  );
-                })}
+            ) : (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 mx-auto flex items-center justify-center">
+                  <User className="w-4 h-4" />
+                </div>
+                <p className="text-xs font-bold text-slate-800">No recipient selected</p>
+                <p className="text-[11px] text-slate-400 max-w-[240px] mx-auto leading-relaxed">
+                  Enter any recipient name, phone number, or UPI ID above to send money.
+                </p>
               </div>
-            </div>
+            )}
 
             {/* Debit Bank Account Info */}
             <div className="p-3 rounded-2xl bg-orange-50/60 border border-orange-200/60 flex items-center justify-between text-xs">
