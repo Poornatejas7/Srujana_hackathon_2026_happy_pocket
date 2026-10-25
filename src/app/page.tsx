@@ -1,14 +1,30 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Wifi, 
-  Smartphone, 
-  Monitor, 
   CheckCircle2, 
-  Receipt,
-  LogOut,
-  Layers
+  Menu,
+  ChevronDown,
+  Power,
+  Volume2,
+  VolumeX,
+  Volume1,
+  RotateCw,
+  Camera,
+  RefreshCw,
+  Undo2,
+  Circle,
+  Square,
+  QrCode,
+  Send,
+  BarChart3,
+  Database,
+  ShieldCheck,
+  Smartphone,
+  SlidersHorizontal,
+  Sparkles,
+  Maximize2
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -28,6 +44,7 @@ import InsightsTab from '@/components/InsightsTab';
 import AuthScreen from '@/components/AuthScreen';
 import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
+import AndroidDrawer from '@/components/AndroidDrawer';
 import { RawTransaction } from '@/types/finance';
 import { enrichAndAnalyzeTransactions } from '@/lib/engine';
 
@@ -35,24 +52,75 @@ export default function HappyPocketApp() {
   const [balance, setBalance] = useState<number>(14524.91);
   const [transactions, setTransactions] = useState<DisplayTransaction[]>(DEFAULT_RECENT_TRANSACTIONS);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
-  const [desktopMode, setDesktopMode] = useState<'phone' | 'wide'>('phone');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
   const [isDbLoading, setIsDbLoading] = useState<boolean>(false);
+  const [dbCount, setDbCount] = useState<number>(0);
   
   // Financial engine state
   const [extractedRawTxs, setExtractedRawTxs] = useState<RawTransaction[]>([]);
   const [analysisResult, setAnalysisResult] = useState<ReturnType<typeof enrichAndAnalyzeTransactions> | null>(null);
 
-  // Modals state
+  // In-App Modals & Drawer State
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [isSendOpen, setIsSendOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Android Studio Emulator State
+  const [isPoweredOn, setIsPoweredOn] = useState(true);
+  const [volumeLevel, setVolumeLevel] = useState(80);
+  const [showVolumeHud, setShowVolumeHud] = useState(false);
+  const [isFlashing, setIsFlashing] = useState(false);
+  const [navStyle, setNavStyle] = useState<'buttons' | 'gesture'>('buttons');
+  const [currentTime, setCurrentTime] = useState('09:41');
+  const volumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Update clock
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      setCurrentTime(`${hours}:${minutes}`);
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 3200);
+  };
+
+  // Emulator Volume Trigger
+  const handleVolumeChange = (delta: number) => {
+    setVolumeLevel((prev) => {
+      const next = Math.min(100, Math.max(0, prev + delta));
+      setShowVolumeHud(true);
+      if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+      volumeTimeoutRef.current = setTimeout(() => setShowVolumeHud(false), 2200);
+      return next;
+    });
+  };
+
+  // Emulator Screenshot Trigger
+  const handleTakeScreenshot = () => {
+    setIsFlashing(true);
+    setTimeout(() => setIsFlashing(false), 350);
+    showToast('📸 Screenshot saved to Android Studio /storage/emulated/0/Pictures');
+  };
+
+  // Emulator Restart App Trigger
+  const handleRestartApp = () => {
+    setIsPoweredOn(false);
+    showToast('🔄 Restarting Happy Pocket Process (PID 14209)...');
+    setTimeout(() => {
+      setIsPoweredOn(true);
+      loadFromDb();
+    }, 600);
   };
 
   // Check login state on mount
@@ -65,76 +133,77 @@ export default function HappyPocketApp() {
     }
   }, []);
 
-  // Load real data from MongoDB Atlas on mount
-  useEffect(() => {
-    async function loadFromDb() {
-      try {
-        setIsDbLoading(true);
-        const res = await fetch('/api/transactions');
-        const data = await res.json();
+  // Fetch real data from MongoDB Atlas
+  const loadFromDb = async () => {
+    try {
+      setIsDbLoading(true);
+      const res = await fetch('/api/transactions');
+      const data = await res.json();
 
-        if (data.success && data.transactions && data.transactions.length > 0) {
-          const rawList: RawTransaction[] = data.transactions.map((t: any) => ({
-            id: t._id || t.id,
-            accountId: t.accountId || 'acc_primary_sbi',
-            amount: t.amount,
-            rawDescription: t.rawDescription,
-            currency: t.currency || 'INR',
-            timestamp: t.timestamp,
-            txMode: t.txMode || 'UPI',
-            upiRrn: t.upiRrn,
-            payeeName: t.payeeName,
-            vpaHandle: t.vpaHandle,
-            theme: t.theme,
-            themeIcon: t.themeIcon,
-            accountType: t.accountType || (t.isInternalTransfer ? 'Personal' : 'Merchant / Business'),
-            isInternalTransfer: t.isInternalTransfer || false,
-            isReimbursementOffset: t.isReimbursementOffset || false,
-            isRecurringAutoPay: t.isRecurringAutoPay || false,
-          }));
+      if (data.success && data.transactions && data.transactions.length > 0) {
+        setDbCount(data.transactions.length);
+        const rawList: RawTransaction[] = data.transactions.map((t: any) => ({
+          id: t._id || t.id,
+          accountId: t.accountId || 'acc_primary_sbi',
+          amount: t.amount,
+          rawDescription: t.rawDescription,
+          currency: t.currency || 'INR',
+          timestamp: t.timestamp,
+          txMode: t.txMode || 'UPI',
+          upiRrn: t.upiRrn,
+          payeeName: t.payeeName,
+          vpaHandle: t.vpaHandle,
+          theme: t.theme,
+          themeIcon: t.themeIcon,
+          accountType: t.accountType || (t.isInternalTransfer ? 'Personal' : 'Merchant / Business'),
+          isInternalTransfer: t.isInternalTransfer || false,
+          isReimbursementOffset: t.isReimbursementOffset || false,
+          isRecurringAutoPay: t.isRecurringAutoPay || false,
+        }));
 
-          setExtractedRawTxs(rawList);
-          const analyzed = enrichAndAnalyzeTransactions(rawList);
-          setAnalysisResult(analyzed);
+        setExtractedRawTxs(rawList);
+        const analyzed = enrichAndAnalyzeTransactions(rawList);
+        setAnalysisResult(analyzed);
 
-          const converted: DisplayTransaction[] = analyzed.enriched.map((item, idx) => ({
-            id: item.id || `live_db_${idx}`,
-            title: item.cleanMerchant || item.payeeName || item.rawDescription,
-            rawTimeText: new Date(item.timestamp).toLocaleDateString('en-IN', {
-              month: 'short',
-              day: 'numeric',
-            }),
-            timestamp: item.timestamp,
-            amount: item.amount,
-            type: item.amount > 0 ? 'salary' : (item.category === 'Groceries' ? 'grocery' : item.category === 'Transport & Fuel' ? 'fuel' : item.isInternalTransfer ? 'transfer' : 'other'),
-            accountType: item.accountType,
-            theme: item.theme,
-            themeIcon: item.themeIcon,
-            vpaHandle: item.vpaHandle,
-            payeeName: item.payeeName,
-            category: item.category,
-          }));
+        const converted: DisplayTransaction[] = analyzed.enriched.map((item, idx) => ({
+          id: item.id || `live_db_${idx}`,
+          title: item.cleanMerchant || item.payeeName || item.rawDescription,
+          rawTimeText: new Date(item.timestamp).toLocaleDateString('en-IN', {
+            month: 'short',
+            day: 'numeric',
+          }),
+          timestamp: item.timestamp,
+          amount: item.amount,
+          type: item.amount > 0 ? 'salary' : (item.category === 'Groceries' ? 'grocery' : item.category === 'Transport & Fuel' ? 'fuel' : item.isInternalTransfer ? 'transfer' : 'other'),
+          accountType: item.accountType,
+          theme: item.theme,
+          themeIcon: item.themeIcon,
+          vpaHandle: item.vpaHandle,
+          payeeName: item.payeeName,
+          category: item.category,
+        }));
 
-          if (converted.length > 0) {
-            setTransactions(converted);
-          }
+        if (converted.length > 0) {
+          setTransactions(converted);
         }
-      } catch (err) {
-        console.error('Error fetching live transactions from MongoDB:', err);
-      } finally {
-        setIsDbLoading(false);
       }
+    } catch (err) {
+      console.error('Error fetching database transactions:', err);
+    } finally {
+      setIsDbLoading(false);
     }
+  };
 
+  useEffect(() => {
     loadFromDb();
   }, []);
 
-  const handleLoginSuccess = (accountNum?: string) => {
+  const handleLoginSuccess = (name?: string) => {
     setIsLoggedIn(true);
     if (typeof window !== 'undefined') {
       localStorage.setItem('hp_logged_in', 'true');
     }
-    showToast(`Welcome! Logged in as ${accountNum || 'Account User'}`);
+    showToast(`Welcome back, ${name || 'User'}!`);
   };
 
   const handleLogout = () => {
@@ -142,11 +211,10 @@ export default function HappyPocketApp() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('hp_logged_in', 'false');
     }
-    setActiveTab('home');
     showToast('Logged out successfully');
   };
 
-  // Handle successful payments (auto-recorded to MongoDB Atlas in real time)
+  // Payment Success Handler
   const handlePaymentSuccess = (amount: number, merchant: string, txDoc?: any) => {
     setBalance((prev) => Math.max(0, prev - amount));
     const newTx: DisplayTransaction = {
@@ -155,28 +223,27 @@ export default function HappyPocketApp() {
       rawTimeText: 'Just now',
       timestamp: txDoc?.timestamp || new Date().toISOString(),
       amount: -amount,
-      type: txDoc?.category === 'Groceries' ? 'grocery' : txDoc?.category === 'Transport & Fuel' ? 'fuel' : 'other',
-      accountType: txDoc?.accountType || 'Merchant / Business',
+      type: 'other',
+      accountType: 'Merchant / Business',
       theme: txDoc?.theme,
       themeIcon: txDoc?.themeIcon,
       vpaHandle: txDoc?.vpaHandle,
       payeeName: txDoc?.payeeName || merchant,
-      category: txDoc?.category,
+      category: txDoc?.theme || 'Payment',
     };
     setTransactions((prev) => [newTx, ...prev]);
 
-    // Keep raw engine analytics and category charts synced without reload
     const rawEntry: RawTransaction = {
       id: newTx.id,
       accountId: 'acc_primary_sbi',
       amount: -amount,
-      rawDescription: txDoc?.rawDescription || `WDL TFR UPI/DR/PAY/${merchant}/UPI`,
+      rawDescription: txDoc?.rawDescription || `UPI/DR/${merchant}/PAYMENT`,
       currency: 'INR',
       timestamp: newTx.timestamp,
       txMode: 'UPI',
       upiRrn: txDoc?.upiRrn,
       payeeName: merchant,
-      accountType: txDoc?.accountType || 'Merchant / Business',
+      accountType: 'Merchant / Business',
       theme: txDoc?.theme,
       themeIcon: txDoc?.themeIcon,
       isInternalTransfer: false,
@@ -194,7 +261,7 @@ export default function HappyPocketApp() {
     showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}${themeMsg} • Recorded in Atlas!`);
   };
 
-  // Handle successful money transfers (auto-recorded to MongoDB Atlas in real time)
+  // Send Money Handler
   const handleSendSuccess = (amount: number, recipient: string, txDoc?: any) => {
     setBalance((prev) => Math.max(0, prev - amount));
     const isSelf = txDoc?.isInternalTransfer || recipient.toLowerCase().includes('kotresh') || recipient.toLowerCase().includes('self');
@@ -242,7 +309,7 @@ export default function HappyPocketApp() {
     showToast(`Sent ₹${amount.toLocaleString('en-IN')} to ${recipient}${themeMsg} • Recorded in Atlas!`);
   };
 
-  // Handle imported statement items
+  // Statement Upload Handler
   const handleImportedTransactions = (imported: DisplayTransaction[], raw?: RawTransaction[]) => {
     setTransactions((prev) => [...imported, ...prev]);
     if (raw && raw.length > 0) {
@@ -253,591 +320,639 @@ export default function HappyPocketApp() {
     showToast(`Categorized & saved ${imported.length} statement records to MongoDB Atlas!`);
   };
 
-  // Quick Action handlers
+  // Quick Action triggers
   const handleScanPay = () => setIsScanOpen(true);
   const handleSendMoney = () => setIsSendOpen(true);
   const handleTransactionsClick = () => setActiveTab('history');
 
-  return (
-    <div className="min-h-screen bg-[#EEF2F6] text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white relative">
-      
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-xl border border-slate-800 animate-bounce">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+  // Android System Navigation Buttons handler
+  const handleAndroidBack = () => {
+    if (isDrawerOpen) {
+      setIsDrawerOpen(false);
+      return;
+    }
+    if (isScanOpen) {
+      setIsScanOpen(false);
+      return;
+    }
+    if (isSendOpen) {
+      setIsSendOpen(false);
+      return;
+    }
+    if (isUploadOpen) {
+      setIsUploadOpen(false);
+      return;
+    }
+    if (isQrOpen) {
+      setIsQrOpen(false);
+      return;
+    }
+    if (activeTab !== 'home') {
+      setActiveTab('home');
+    }
+  };
 
-      {/* Top Desktop Helper / Mode Switcher Banner (Visible only on tablets & desktop >= 768px) */}
-      <aside aria-label="Desktop Viewport Switcher" className="hidden md:flex items-center justify-between px-8 py-2.5 bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 text-xs shadow-xs">
+  const handleAndroidHome = () => {
+    setIsDrawerOpen(false);
+    setIsScanOpen(false);
+    setIsSendOpen(false);
+    setIsUploadOpen(false);
+    setIsQrOpen(false);
+    setActiveTab('home');
+  };
+
+  const handleAndroidRecents = () => {
+    setIsDrawerOpen((prev) => !prev);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#18191C] text-slate-100 flex flex-col font-sans select-none overflow-x-hidden">
+      
+      {/* ======================================================== */}
+      {/* 1. ANDROID STUDIO IDE TOP WORKSPACE HEADER BAR */}
+      {/* ======================================================== */}
+      <header className="w-full bg-[#1E1F22] border-b border-[#2B2D30] px-4 py-2 flex items-center justify-between text-xs text-slate-300 shrink-0 z-40 shadow-xs">
+        
+        {/* Left: Android Studio Branding & Device Selector */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <HappyPocketLogo size={28} />
-            <span className="font-extrabold text-sm tracking-tight text-slate-900">
-              Happy Pocket
+            {/* Green Android Icon */}
+            <div className="w-6 h-6 rounded-md bg-[#3DDC84] flex items-center justify-center text-slate-950 font-bold shadow-xs">
+              <span className="text-[11px]">🤖</span>
+            </div>
+            <span className="font-extrabold text-white text-xs tracking-tight">
+              Android Studio
             </span>
           </div>
-          <span className="h-4 w-px bg-slate-200" />
-          <span className="text-slate-500 font-medium">
-            Next.js Responsive Banking App
+
+          <span className="h-3.5 w-px bg-slate-700 hidden sm:inline" />
+
+          {/* Running Device Tab */}
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#2B2D30] border border-[#3E4249] text-white">
+            <Smartphone className="w-3.5 h-3.5 text-[#3DDC84]" />
+            <span className="font-semibold text-[11px] truncate">
+              Pixel 8 Pro • API 34 (Android 14)
+            </span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+
+          <span className="text-[11px] text-slate-400 font-mono hidden md:inline">
+            Happy Pocket (Debug v2.4)
           </span>
         </div>
 
-        {/* View Switcher Toggle */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
-          <button
-            type="button"
-            onClick={() => setDesktopMode('phone')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-              desktopMode === 'phone'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Smartphone className="w-3.5 h-3.5 text-orange-500" />
-            <span>Mobile Frame</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setDesktopMode('wide')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-              desktopMode === 'wide'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Monitor className="w-3.5 h-3.5 text-orange-500" />
-            <span>Responsive Dashboard</span>
-          </button>
-        </div>
+        {/* Right: Live Diagnostics & Emulator Toolbar Buttons */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* MongoDB Atlas Live Badge */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono">
+            <Database className="w-3 h-3 text-emerald-400" />
+            <span className="font-bold hidden sm:inline">Atlas DB:</span>
+            <span>{dbCount > 0 ? `${dbCount} Txs` : 'Connected'}</span>
+          </div>
 
-        {/* Right Info */}
-        <div className="flex items-center gap-2">
-          {isLoggedIn ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setIsUploadOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold transition shadow-xs cursor-pointer"
-              >
-                <Receipt className="w-3.5 h-3.5" />
-                <span>Import Statement</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-600 font-bold transition shadow-xs cursor-pointer border border-slate-200"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Log Out</span>
-              </button>
-            </>
-          ) : (
+          {/* Hot Reload / Refresh */}
+          <button
+            type="button"
+            onClick={loadFromDb}
+            title="Hot Reload Data from Atlas"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#2B2D30] hover:bg-[#35383E] text-slate-200 transition cursor-pointer border border-[#3E4249]"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isDbLoading ? 'animate-spin' : ''}`} />
+            <span className="text-[10px] font-bold hidden sm:inline">Sync DB</span>
+          </button>
+
+          {/* Navigation Mode Switcher: 3-Buttons vs Gesture */}
+          <div className="flex items-center bg-[#2B2D30] rounded-md border border-[#3E4249] p-0.5">
             <button
               type="button"
-              onClick={() => handleLoginSuccess('Quick Demo User')}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white font-bold transition shadow-xs cursor-pointer"
+              onClick={() => setNavStyle('buttons')}
+              title="Android 3-Button Navigation (Back, Home, Overview)"
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                navStyle === 'buttons' ? 'bg-[#3E4249] text-white shadow-xs' : 'text-slate-400 hover:text-white'
+              }`}
             >
-              <span>Instant Enter (Demo)</span>
+              3-Button
             </button>
-          )}
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col items-center justify-center p-0 sm:p-4">
-        
-        {/* ======================================================== */}
-        {/* AUTH STATE: WHEN NOT LOGGED IN, SHOW LOGIN & REGISTER */}
-        {/* ======================================================== */}
-        {!isLoggedIn ? (
-          <div className="w-full flex flex-col items-center gap-8 py-4">
-            {/* Screen 1: Welcome Back (Interactive Login Screen) */}
-            <div className="w-full max-w-[380px] sm:max-w-[390px] mx-auto transition-all duration-300">
-              <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
-                <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" />
-              </div>
-            </div>
-
-            {/* Section Divider downwards */}
-            <div className="flex items-center gap-3 w-full max-w-[390px] px-2">
-              <div className="h-px bg-slate-300 flex-1" />
-              <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-white/90 px-3.5 py-1 rounded-full border border-slate-200 shadow-xs">
-                Extra Page Downwards • Create Account (Register)
-              </span>
-              <div className="h-px bg-slate-300 flex-1" />
-            </div>
-
-            {/* Screen 2: Create Account (Register Screen Preview) */}
-            <div className="w-full max-w-[380px] sm:max-w-[390px] mx-auto transition-all duration-300">
-              <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
-                <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="register" />
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setNavStyle('gesture')}
+              title="Android Gesture Navigation Pill"
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                navStyle === 'gesture' ? 'bg-[#3E4249] text-white shadow-xs' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Gesture
+            </button>
           </div>
-        ) : (
-          <>
-            {/* ======================================================== */}
-            {/* VIEW 1: PHONE MOCKUP VIEW */}
-            {/* ======================================================== */}
-            {desktopMode === 'phone' && (
-              <div className="w-full max-w-[380px] sm:max-w-[390px] mx-auto md:my-2 transition-all duration-300">
-                {/* White smartphone bezel matching screenshot */}
-                <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
-                  
-                  {/* Phone Inner Screen Container */}
-                  <div className="w-full bg-[#EEF2F6] flex flex-col justify-between overflow-hidden">
+
+          {/* Quick Power Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsPoweredOn((prev) => !prev)}
+            title={isPoweredOn ? 'Put Emulator in Standby' : 'Wake Emulator'}
+            className={`p-1.5 rounded-md border transition cursor-pointer ${
+              isPoweredOn 
+                ? 'bg-[#2B2D30] hover:bg-red-950/60 text-slate-300 hover:text-red-400 border-[#3E4249]' 
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+            }`}
+          >
+            <Power className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+      </header>
+
+      {/* ======================================================== */}
+      {/* 2. EMULATOR WORKSPACE CANVAS (Android Studio Viewport) */}
+      {/* ======================================================== */}
+      <main className="flex-1 w-full bg-[radial-gradient(#26282E_1px,transparent_1px)] [background-size:20px_20px] flex items-center justify-center p-2 sm:p-6 overflow-y-auto relative">
+        
+        {/* Floating Toast Notification inside Emulator view */}
+        {toastMessage && (
+          <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-bounce">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Emulator Container (Phone Frame + Floating Side Toolbar) */}
+        <div className="relative flex items-center justify-center gap-4 max-w-full">
+          
+          {/* -------------------------------------------------------- */}
+          {/* THE SMARTPHONE DEVICE (PIXEL 8 PRO HARDWARE BEZEL) */}
+          {/* -------------------------------------------------------- */}
+          <div className="relative w-[380px] sm:w-[412px] h-[840px] max-h-[92vh] bg-[#1E2024] rounded-[52px] p-[10px] shadow-[0_0_0_8px_#27292D,0_0_0_10px_#3E4249,0_30px_70px_rgba(0,0,0,0.85)] flex flex-col justify-between transition-all duration-300 border border-slate-700/50">
+            
+            {/* Physical Hardware Buttons on Bezel */}
+            {/* Left Volume Rocker */}
+            <div className="absolute -left-[14px] top-32 w-[5px] h-20 bg-[#35383F] rounded-l-md border-l border-y border-[#4B4F58] flex flex-col justify-between py-1 shadow-md">
+              <button
+                type="button"
+                onClick={() => handleVolumeChange(10)}
+                title="Hardware Volume Up"
+                className="w-full h-8 hover:bg-[#4B4F58] cursor-pointer"
+              />
+              <button
+                type="button"
+                onClick={() => handleVolumeChange(-10)}
+                title="Hardware Volume Down"
+                className="w-full h-8 hover:bg-[#4B4F58] cursor-pointer"
+              />
+            </div>
+
+            {/* Right Power Key */}
+            <div className="absolute -right-[14px] top-28 w-[5px] h-14 bg-[#35383F] rounded-r-md border-r border-y border-[#4B4F58] shadow-md">
+              <button
+                type="button"
+                onClick={() => setIsPoweredOn((prev) => !prev)}
+                title="Hardware Power Button"
+                className="w-full h-full hover:bg-[#4B4F58] cursor-pointer"
+              />
+            </div>
+
+            {/* Speaker Ear Slit at Top Hardware Bezel */}
+            <div className="w-20 h-1 bg-[#0F1012] rounded-full mx-auto mb-1 shrink-0 shadow-inner" />
+
+            {/* -------------------------------------------------------- */}
+            {/* SCREEN DISPLAY GLASS (ANDROID APPLICATION VIEWPORT) */}
+            {/* -------------------------------------------------------- */}
+            <div className="w-full flex-1 bg-[#EEF2F6] text-slate-900 rounded-[44px] overflow-hidden flex flex-col relative shadow-inner">
+              
+              {/* Screenshot Camera Flash Animation */}
+              {isFlashing && (
+                <div className="absolute inset-0 bg-white z-50 pointer-events-none animate-flash" />
+              )}
+
+              {/* Volume HUD Toast Overlay */}
+              {showVolumeHud && (
+                <div className="absolute right-3 top-16 z-40 bg-slate-900/90 text-white backdrop-blur-md px-3 py-2 rounded-2xl shadow-xl flex items-center gap-2 border border-slate-700 animate-fadeIn">
+                  {volumeLevel === 0 ? (
+                    <VolumeX className="w-4 h-4 text-red-400" />
+                  ) : volumeLevel < 50 ? (
+                    <Volume1 className="w-4 h-4 text-orange-400" />
+                  ) : (
+                    <Volume2 className="w-4 h-4 text-emerald-400" />
+                  )}
+                  <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-orange-500 rounded-full transition-all duration-150"
+                      style={{ width: `${volumeLevel}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono font-bold">{volumeLevel}%</span>
+                </div>
+              )}
+
+              {/* Standby / Screen Off Overlay */}
+              {!isPoweredOn ? (
+                <div 
+                  onClick={() => setIsPoweredOn(true)}
+                  className="absolute inset-0 z-40 bg-[#0B0D10] flex flex-col items-center justify-center p-6 text-center cursor-pointer"
+                >
+                  <div className="p-3 rounded-full bg-slate-800/80 text-orange-400 mb-3 border border-slate-700 animate-pulse">
+                    <Power className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-white font-extrabold text-base tracking-tight">
+                    Pixel 8 Pro Standby
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Tap screen or press Power button to unlock
+                  </p>
+                  <span className="mt-4 text-[11px] font-mono text-slate-500">
+                    Android 14 • Happy Pocket
+                  </span>
+                </div>
+              ) : null}
+
+              {/* AUTH SCREEN IF NOT LOGGED IN */}
+              {!isLoggedIn ? (
+                <div className="w-full h-full flex flex-col overflow-y-auto scrollbar-none">
+                  {/* Status Bar */}
+                  <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none shrink-0">
+                    <span className="font-bold text-xs tracking-tight font-sans">{currentTime}</span>
+                    <div className="w-3.5 h-3.5 rounded-full bg-black ring-1 ring-slate-800 shadow-inner" />
+                    <div className="flex items-center gap-1.5 text-slate-800">
+                      <span className="text-[10px] font-bold">5G</span>
+                      <Wifi className="w-3 h-3 stroke-[2.4]" />
+                      <div className="w-4 h-2 rounded-[3px] border-[1.2px] border-slate-800 p-0.5 flex items-center">
+                        <div className="w-full h-full bg-slate-800 rounded-[1px]" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* ======================================================== */}
+                  {/* 1. ANDROID 14 SYSTEM STATUS BAR */}
+                  {/* ======================================================== */}
+                  <div className="w-full pt-2.5 pb-1 px-6 flex items-center justify-between text-slate-800 select-none shrink-0 bg-transparent z-20">
+                    {/* Left: Dynamic Clock */}
+                    <span className="font-bold text-xs tracking-tight font-sans">
+                      {currentTime}
+                    </span>
+
+                    {/* Center: Camera Punch-Hole Cutout */}
+                    <div 
+                      className="w-3.5 h-3.5 rounded-full bg-black ring-1 ring-slate-800 shadow-inner" 
+                      title="Android Front Camera"
+                    />
+
+                    {/* Right: Cellular 5G, Wi-Fi, Battery */}
+                    <div className="flex items-center gap-1.5 text-slate-800">
+                      <span className="text-[10px] font-extrabold tracking-wider">5G</span>
+                      {/* Wi-Fi Icon */}
+                      <Wifi className="w-3 h-3 stroke-[2.4]" />
+                      {/* Battery 98% Icon */}
+                      <div className="w-4 h-2 rounded-[3px] border-[1.2px] border-slate-800 p-0.5 flex items-center">
+                        <div className="w-[90%] h-full bg-slate-800 rounded-[1px]" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ======================================================== */}
+                  {/* 2. TOP MOBILE APP HEADER WITH CLEAR DROP-DOWN MENU ICON */}
+                  {/* ======================================================== */}
+                  <div className="px-4 pt-1.5 pb-2 flex items-center justify-between shrink-0 bg-transparent z-20">
                     
-                    {/* 1. Mobile Status Bar (9:41, Signal, Battery) */}
-                    <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none">
-                      <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
-                      
-                      {/* Status Bar Icons */}
-                      <div className="flex items-center gap-1.5 text-slate-800">
-                        {/* Cellular signal bars */}
-                        <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
-                          <rect x="0" y="7" width="2.8" height="4" rx="0.8" />
-                          <rect x="4.5" y="4.5" width="2.8" height="6.5" rx="0.8" />
-                          <rect x="9" y="2" width="2.8" height="9" rx="0.8" />
-                          <rect x="13.5" y="0" width="2.8" height="11" rx="0.8" />
-                        </svg>
-                        {/* Wi-Fi Icon */}
-                        <Wifi className="w-3.5 h-3.5 stroke-[2.4]" />
-                        {/* Battery Icon */}
-                        <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
-                          <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
-                        </div>
+                    {/* Left: CLEAR DROP-DOWN MENU ICON (Hamburger button) */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsDrawerOpen(true)}
+                        className="flex items-center gap-1.5 p-2 px-2.5 rounded-2xl bg-white shadow-xs border border-slate-200/90 hover:bg-slate-50 text-slate-800 active:scale-95 transition-all cursor-pointer group"
+                        aria-label="Open Dropdown Menu"
+                        title="Open Menu • All Functionalities"
+                      >
+                        <Menu className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-[11px] font-extrabold text-slate-700 hidden sm:inline">
+                          Menu
+                        </span>
+                        <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600" />
+                      </button>
+
+                      {/* Mascot Brand Logo */}
+                      <div 
+                        className="flex items-center cursor-pointer active:scale-95 transition-transform"
+                        onClick={() => setActiveTab('home')}
+                        title="Happy Pocket Home"
+                      >
+                        <HappyPocketLogo size={42} />
                       </div>
                     </div>
 
-                    {/* 2. App Header (Mascot, Title & User Avatar) */}
-                    <div className="px-5 pt-2 pb-2 flex items-center justify-between">
-                      {/* Left: Mascot Character */}
-                      <div 
-                        className="flex items-center cursor-pointer active:scale-95 transition-transform" 
-                        onClick={() => setActiveTab('home')}
+                    {/* Center: Dynamic Screen Title if not Home */}
+                    {activeTab !== 'home' && (
+                      <h2 className="text-sm font-extrabold text-slate-900 tracking-tight capitalize truncate max-w-[130px]">
+                        {activeTab === 'expense' ? 'Expenses' : activeTab === 'insights' ? 'AI Advisor' : activeTab}
+                      </h2>
+                    )}
+
+                    {/* Right: Quick Action Buttons (QR Scanner & Profile Avatar) */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsQrOpen(true)}
+                        title="My Bharat QR"
+                        className="p-2 rounded-2xl bg-white shadow-xs border border-slate-200/90 text-slate-700 hover:text-orange-500 transition cursor-pointer"
                       >
-                        <HappyPocketLogo size={50} />
-                      </div>
+                        <QrCode className="w-4 h-4" />
+                      </button>
 
-                      {/* Center: Title when on Expense Tracker or Insights */}
-                      {activeTab === 'expense' && (
-                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-                          Expense Tracker
-                        </h2>
-                      )}
-                      {activeTab === 'insights' && (
-                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-                          Smart Insights
-                        </h2>
-                      )}
-
-                      {/* Right: Circular User Avatar */}
                       <div 
                         onClick={() => setActiveTab('profile')}
-                        className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer hover:ring-2 hover:ring-orange-400 transition bg-amber-100 flex items-center justify-center shrink-0"
+                        title="My Profile"
+                        className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-xs cursor-pointer hover:ring-2 hover:ring-orange-400 transition bg-amber-100 flex items-center justify-center shrink-0"
                       >
                         <img
                           src="/avatar.jpg"
-                          alt="User Avatar"
+                          alt="Kotresh C"
                           className="w-full h-full object-cover"
                         />
                       </div>
                     </div>
 
-                    {/* 3. Screen Body Content */}
-                    <div className="px-4 py-1 space-y-3.5">
-                      {activeTab === 'home' && (
-                        <>
-                          {/* Signature Account Card with Midnight Navy & Orange Wave */}
-                          <AccountCard
-                            accountName="Savings Account"
-                            accountNumberMask="•••• 5274"
-                            balance={balance}
-                          />
+                  </div>
 
-                          {/* 3 Quick Action Buttons: Scan & Pay, Send Money, Transactions */}
-                          <ActionButtons
-                            onScanPayClick={handleScanPay}
-                            onSendMoneyClick={handleSendMoney}
-                            onTransactionsClick={handleTransactionsClick}
-                          />
+                  {/* ======================================================== */}
+                  {/* 3. SCROLLABLE SCREEN BODY VIEWPORT (ALL FUNCTIONALITIES) */}
+                  {/* ======================================================== */}
+                  <div className="flex-1 overflow-y-auto scrollbar-none px-4 py-1.5 space-y-3.5 relative">
+                    
+                    {/* TAB 1: HOME DASHBOARD */}
+                    {activeTab === 'home' && (
+                      <>
+                        {/* Account Card (Balance & Masked number) */}
+                        <AccountCard
+                          accountName="Savings Account"
+                          accountNumberMask="•••• 5274"
+                          balance={balance}
+                        />
 
-                          {/* Recent Transactions List (Grocery, Fuel, Salary) */}
-                          <RecentTransactions
-                            transactions={transactions.slice(0, 3)}
-                            onTransactionClick={() => setActiveTab('history')}
-                            onViewAll={() => setActiveTab('history')}
-                          />
-                        </>
-                      )}
+                        {/* 3 Quick Action Buttons: Scan & Pay, Send Money, Transactions */}
+                        <ActionButtons
+                          onScanPayClick={handleScanPay}
+                          onSendMoneyClick={handleSendMoney}
+                          onTransactionsClick={handleTransactionsClick}
+                        />
 
-                      {activeTab === 'expense' && (
-                        <ExpenseTrackerTab />
-                      )}
+                        {/* Quick Atlas Sync Chip */}
+                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200/80 shadow-xs text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] font-bold text-slate-700">
+                              Real-Time Ledger: {transactions.length} records
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('expense')}
+                            className="text-[10px] font-bold text-orange-600 hover:underline cursor-pointer"
+                          >
+                            Track Velocity →
+                          </button>
+                        </div>
 
-                      {activeTab === 'insights' && (
+                        {/* Recent Transactions List with Theme Badges */}
+                        <RecentTransactions
+                          transactions={transactions.slice(0, 4)}
+                          onTransactionClick={() => setActiveTab('history')}
+                          onViewAll={() => setActiveTab('history')}
+                        />
+                      </>
+                    )}
+
+                    {/* TAB 2: EXPENSE TRACKER & VELOCITY (PARTICULAR AMOUNTS) */}
+                    {activeTab === 'expense' && (
+                      <div className="pb-2">
+                        <ExpenseTrackerTab 
+                          transactions={transactions} 
+                          rawTransactions={extractedRawTxs} 
+                          onNavigateToAdvisor={() => setActiveTab('insights')}
+                        />
+                      </div>
+                    )}
+
+                    {/* TAB 3: SMART INSIGHTS & AI WEALTH ADVISOR */}
+                    {activeTab === 'insights' && (
+                      <div className="pb-2">
                         <InsightsTab />
-                      )}
+                      </div>
+                    )}
 
-                      {activeTab === 'payments' && (
+                    {/* TAB 4: UPI BILL PAYMENTS & RECHARGES */}
+                    {activeTab === 'payments' && (
+                      <div className="pb-2">
                         <PaymentsTab
                           onScanClick={handleScanPay}
                           onSendClick={handleSendMoney}
                         />
-                      )}
+                      </div>
+                    )}
 
-                      {activeTab === 'history' && (
+                    {/* TAB 5: TRANSACTIONS HISTORY & FILTER */}
+                    {activeTab === 'history' && (
+                      <div className="pb-2">
                         <HistoryTab
                           transactions={transactions}
                           onOpenUpload={() => setIsUploadOpen(true)}
                         />
-                      )}
+                      </div>
+                    )}
 
-                      {activeTab === 'profile' && (
+                    {/* TAB 6: ACCOUNT PROFILE & SECURITY */}
+                    {activeTab === 'profile' && (
+                      <div className="pb-2">
                         <ProfileTab 
                           onShowQR={() => setIsQrOpen(true)} 
                           onLogout={handleLogout}
                         />
-                      )}
-                    </div>
-
-                    {/* 4. Bottom Navigation Bar */}
-                    <div className="mt-3">
-                      <BottomNav
-                        activeTab={activeTab}
-                        onChangeTab={(t) => setActiveTab(t)}
-                      />
-                    </div>
+                      </div>
+                    )}
 
                   </div>
-                </div>
 
-                {/* ======================================================== */}
-                {/* EXTRA PAGE DOWNWARDS: EXPENSE TRACKER */}
-                {/* ======================================================== */}
-                <div className="mt-10 pt-4 flex flex-col items-center">
-                  <div className="flex items-center gap-3 w-full px-2 mb-6">
-                    <div className="h-px bg-slate-300 flex-1" />
-                    <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-white/90 px-3.5 py-1 rounded-full border border-slate-200 shadow-xs">
-                      Extra Page Downwards • Expense Tracker
-                    </span>
-                    <div className="h-px bg-slate-300 flex-1" />
-                  </div>
-
-                  {/* Smartphone bezel */}
-                  <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
-                    <div className="w-full bg-[#EEF2F6] flex flex-col justify-between overflow-hidden">
-                      
-                      {/* Status Bar */}
-                      <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none">
-                        <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
-                        <div className="flex items-center gap-1.5 text-slate-800">
-                          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
-                            <rect x="0" y="7" width="2.8" height="4" rx="0.8" />
-                            <rect x="4.5" y="4.5" width="2.8" height="6.5" rx="0.8" />
-                            <rect x="9" y="2" width="2.8" height="9" rx="0.8" />
-                            <rect x="13.5" y="0" width="2.8" height="11" rx="0.8" />
-                          </svg>
-                          <Wifi className="w-3.5 h-3.5 stroke-[2.4]" />
-                          <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
-                            <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Header */}
-                      <div className="px-5 pt-2 pb-2 flex items-center justify-between">
-                        <div 
-                          className="flex items-center cursor-pointer active:scale-95 transition-transform"
-                          onClick={() => setActiveTab('home')}
-                        >
-                          <HappyPocketLogo size={50} />
-                        </div>
-
-                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-                          Expense Tracker
-                        </h2>
-
-                        <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm bg-amber-100 flex items-center justify-center shrink-0">
-                          <img
-                            src="/avatar.jpg"
-                            alt="User Avatar"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="px-4 py-1">
-                        <ExpenseTrackerTab 
-                          transactions={transactions} 
-                          rawTransactions={extractedRawTxs} 
-                          onNavigateToAdvisor={() => setActiveTab('insights')}
-                        />
-                      </div>
-
-                      {/* Bottom Navigation */}
-                      <div className="mt-3">
-                        <BottomNav
-                          activeTab="expense"
-                          onChangeTab={(t) => setActiveTab(t)}
-                        />
-                      </div>
-
-                    </div>
-                  </div>
-                </div>
-
-                {/* ======================================================== */}
-                {/* EXTRA PAGE DOWNWARDS: SMART INSIGHTS */}
-                {/* ======================================================== */}
-                <div className="mt-10 pt-4 flex flex-col items-center">
-                  <div className="flex items-center gap-3 w-full px-2 mb-6">
-                    <div className="h-px bg-slate-300 flex-1" />
-                    <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-white/90 px-3.5 py-1 rounded-full border border-slate-200 shadow-xs">
-                      Extra Page Downwards • Smart Insights (Happy Pocket Theme)
-                    </span>
-                    <div className="h-px bg-slate-300 flex-1" />
-                  </div>
-
-                  <div className="w-full bg-[#EEF2F6] md:rounded-[48px] md:shadow-[0_20px_50px_rgba(15,23,42,0.12)] md:border-[10px] md:border-white overflow-hidden">
-                    <div className="w-full bg-[#EEF2F6] flex flex-col justify-between overflow-hidden">
-                      
-                      {/* Status Bar */}
-                      <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none">
-                        <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
-                        <div className="flex items-center gap-1.5 text-slate-800">
-                          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor">
-                            <rect x="0" y="7" width="2.8" height="4" rx="0.8" />
-                            <rect x="4.5" y="4.5" width="2.8" height="6.5" rx="0.8" />
-                            <rect x="9" y="2" width="2.8" height="9" rx="0.8" />
-                            <rect x="13.5" y="0" width="2.8" height="11" rx="0.8" />
-                          </svg>
-                          <Wifi className="w-3.5 h-3.5 stroke-[2.4]" />
-                          <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
-                            <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Header */}
-                      <div className="px-5 pt-2 pb-2 flex items-center justify-between">
-                        <div 
-                          className="flex items-center cursor-pointer active:scale-95 transition-transform"
-                          onClick={() => setActiveTab('home')}
-                        >
-                          <HappyPocketLogo size={50} />
-                        </div>
-
-                        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-                          Smart Insights
-                        </h2>
-
-                        <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm bg-amber-100 flex items-center justify-center shrink-0">
-                          <img
-                            src="/avatar.jpg"
-                            alt="User Avatar"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="px-4 py-1">
-                        <InsightsTab />
-                      </div>
-
-                      {/* Bottom Navigation */}
-                      <div className="mt-2">
-                        <BottomNav
-                          activeTab="insights"
-                          onChangeTab={(t) => setActiveTab(t)}
-                        />
-                      </div>
-
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {/* ======================================================== */}
-            {/* VIEW 2: RESPONSIVE WIDE DASHBOARD VIEW */}
-            {/* ======================================================== */}
-            {desktopMode === 'wide' && (
-              <div className="w-full max-w-6xl mx-auto space-y-6 transition-all duration-300 py-4 px-4 sm:px-6">
-                
-                {/* Top Brand Banner */}
-                <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-[32px] bg-white border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                  <div className="flex items-center gap-4">
-                    <HappyPocketLogo size={64} />
-                    <div>
-                      <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                        Happy Pocket
-                      </h1>
-                      <p className="text-xs text-slate-500 font-medium mt-0.5">
-                        Unified UPI Payments & Living Expense Visibility
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* User Profile Mini Card */}
-                  <div className="flex items-center gap-3 p-2 pr-4 rounded-2xl bg-slate-50 border border-slate-100">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border border-white shadow-xs">
-                      <img
-                        src="/avatar.jpg"
-                        alt="User Avatar"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 block">Poornatejas</span>
-                      <span className="text-[10px] text-slate-400 font-mono">tejas@okhdfcbank</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dashboard 2-Column Responsive Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  
-                  {/* Left Column (5 Cols): Card + Quick Actions */}
-                  <div className="lg:col-span-5 space-y-6">
-                    {/* Account Card */}
-                    <AccountCard
-                      accountName="Savings Account"
-                      accountNumberMask="•••• 5274"
-                      balance={balance}
+                  {/* ======================================================== */}
+                  {/* 4. FIXED BOTTOM NAVIGATION BAR */}
+                  {/* ======================================================== */}
+                  <div className="shrink-0 bg-transparent z-20">
+                    <BottomNav
+                      activeTab={activeTab}
+                      onChangeTab={(t) => setActiveTab(t)}
                     />
-
-                    {/* 3 Quick Action Buttons */}
-                    <div className="rounded-[28px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.04)] border border-slate-100">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                        Quick Operations
-                      </h4>
-                      <ActionButtons
-                        onScanPayClick={handleScanPay}
-                        onSendMoneyClick={handleSendMoney}
-                        onTransactionsClick={handleTransactionsClick}
-                      />
-                    </div>
-
-                    {/* Financial Health Summary Widget */}
-                    <div className="rounded-[28px] bg-gradient-to-br from-slate-900 to-[#0A172E] p-6 text-white shadow-lg space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                          Noise Deductions
-                        </span>
-                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
-                          Zero Distortion
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 pt-1">
-                        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                          <span className="text-[11px] text-slate-400 block">Self-Transfers</span>
-                          <span className="text-sm font-bold font-mono text-white mt-1 block">
-                            ₹15,000.00
-                          </span>
-                          <span className="text-[10px] text-emerald-400">Excluded from spend</span>
-                        </div>
-                        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                          <span className="text-[11px] text-slate-400 block">Refunds Paired</span>
-                          <span className="text-sm font-bold font-mono text-cyan-300 mt-1 block">
-                            ₹4,200.00
-                          </span>
-                          <span className="text-[10px] text-cyan-400">Net living balanced</span>
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Right Column (7 Cols): Ledger & Tab Content */}
-                  <div className="lg:col-span-7 space-y-6">
-                    
-                    {/* Tab Navigation Bar on Desktop */}
-                    <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.03)]">
-                      {[
-                        { id: 'home', label: 'Overview' },
-                        { id: 'expense', label: 'Expense Tracker' },
-                        { id: 'insights', label: 'Smart Insights' },
-                        { id: 'history', label: `Transactions (${transactions.length})` },
-                        { id: 'payments', label: 'UPI Bill Payments' },
-                        { id: 'profile', label: 'Account Profile' },
-                      ].map((t) => (
+                  {/* ======================================================== */}
+                  {/* 5. ANDROID SYSTEM NAVIGATION (3-BUTTON OR GESTURE PILL) */}
+                  {/* ======================================================== */}
+                  <div className="w-full py-1.5 px-6 flex items-center justify-center shrink-0 bg-white/95 border-t border-slate-100 z-20">
+                    {navStyle === 'buttons' ? (
+                      /* Android 3-Button Navigation (Back, Home, Overview) */
+                      <div className="w-full flex items-center justify-around text-slate-600">
+                        {/* Back Button (◁) */}
                         <button
-                          key={t.id}
                           type="button"
-                          onClick={() => setActiveTab(t.id as any)}
-                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
-                            activeTab === t.id
-                              ? 'bg-orange-500 text-white shadow-xs'
-                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                          }`}
+                          onClick={handleAndroidBack}
+                          title="Android Back Button"
+                          className="p-1 hover:text-slate-900 active:scale-90 transition cursor-pointer"
                         >
-                          {t.label}
+                          <Undo2 className="w-4 h-4 stroke-[2.2]" />
                         </button>
-                      ))}
-                    </div>
 
-                    {/* Tab Content Panes */}
-                    {activeTab === 'home' && (
-                      <RecentTransactions
-                        transactions={transactions}
-                        onTransactionClick={() => setActiveTab('history')}
-                        onViewAll={() => setActiveTab('history')}
-                      />
-                    )}
+                        {/* Home Button (○) */}
+                        <button
+                          type="button"
+                          onClick={handleAndroidHome}
+                          title="Android Home Button"
+                          className="p-1 hover:text-slate-900 active:scale-90 transition cursor-pointer"
+                        >
+                          <Circle className="w-4 h-4 stroke-[2.4]" />
+                        </button>
 
-                    {activeTab === 'expense' && (
-                      <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                        <ExpenseTrackerTab 
-                          transactions={transactions} 
-                          rawTransactions={extractedRawTxs} 
-                          onNavigateToAdvisor={() => setActiveTab('insights')}
-                        />
+                        {/* Overview / Recents Button (▢) -> Opens Drawer */}
+                        <button
+                          type="button"
+                          onClick={handleAndroidRecents}
+                          title="Android Recents / Menu Drawer Button"
+                          className="p-1 hover:text-slate-900 active:scale-90 transition cursor-pointer"
+                        >
+                          <Square className="w-3.5 h-3.5 stroke-[2.4]" />
+                        </button>
                       </div>
-                    )}
-
-                    {activeTab === 'insights' && (
-                      <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                        <InsightsTab />
-                      </div>
-                    )}
-
-                    {activeTab === 'history' && (
-                      <HistoryTab
-                        transactions={transactions}
-                        onOpenUpload={() => setIsUploadOpen(true)}
+                    ) : (
+                      /* Android Gesture Navigation Pill */
+                      <div 
+                        onClick={handleAndroidHome}
+                        title="Android Gesture Bar (Tap for Home)"
+                        className="w-32 h-1 bg-slate-800 rounded-full cursor-pointer hover:bg-slate-950 transition"
                       />
                     )}
-
-                    {activeTab === 'payments' && (
-                      <PaymentsTab
-                        onScanClick={handleScanPay}
-                        onSendClick={handleSendMoney}
-                      />
-                    )}
-
-                    {activeTab === 'profile' && (
-                      <ProfileTab 
-                        onShowQR={() => setIsQrOpen(true)} 
-                        onLogout={handleLogout}
-                      />
-                    )}
-
                   </div>
-                </div>
-              </div>
-            )}
 
-          </>
-        )}
+                  {/* ======================================================== */}
+                  {/* 6. ANDROID NAVIGATION DRAWER (DROPDOWN MENU) */}
+                  {/* ======================================================== */}
+                  <AndroidDrawer
+                    isOpen={isDrawerOpen}
+                    onClose={() => setIsDrawerOpen(false)}
+                    activeTab={activeTab}
+                    onSelectTab={(t) => setActiveTab(t)}
+                    onOpenScanPay={() => setIsScanOpen(true)}
+                    onOpenSendMoney={() => setIsSendOpen(true)}
+                    onOpenUploadStatement={() => setIsUploadOpen(true)}
+                    onOpenMyQr={() => setIsQrOpen(true)}
+                    onRefreshData={loadFromDb}
+                    onLogout={handleLogout}
+                    balance={balance}
+                  />
+
+                </>
+              )}
+
+            </div>
+          </div>
+
+          {/* -------------------------------------------------------- */}
+          {/* FLOATING ANDROID STUDIO EMULATOR TOOLBAR (SIDE DOCK) */}
+          {/* -------------------------------------------------------- */}
+          <aside 
+            aria-label="Android Studio Controls"
+            className="hidden md:flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-[#26282E] border border-[#3E4249] shadow-xl text-slate-400 self-center"
+          >
+            {/* Power Button */}
+            <button
+              type="button"
+              onClick={() => setIsPoweredOn((prev) => !prev)}
+              title={isPoweredOn ? 'Power Standby' : 'Power On'}
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <Power className="w-4 h-4" />
+            </button>
+
+            {/* Volume Up */}
+            <button
+              type="button"
+              onClick={() => handleVolumeChange(10)}
+              title="Volume Up (+)"
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <Volume2 className="w-4 h-4" />
+            </button>
+
+            {/* Volume Down */}
+            <button
+              type="button"
+              onClick={() => handleVolumeChange(-10)}
+              title="Volume Down (-)"
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <Volume1 className="w-4 h-4" />
+            </button>
+
+            <span className="w-4 h-px bg-slate-700 my-0.5" />
+
+            {/* Take Screenshot */}
+            <button
+              type="button"
+              onClick={handleTakeScreenshot}
+              title="Take Emulator Screenshot"
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+
+            {/* Restart Process */}
+            <button
+              type="button"
+              onClick={handleRestartApp}
+              title="Restart Application Process"
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+
+            <span className="w-4 h-px bg-slate-700 my-0.5" />
+
+            {/* Back (◁) */}
+            <button
+              type="button"
+              onClick={handleAndroidBack}
+              title="Back"
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+
+            {/* Home (○) */}
+            <button
+              type="button"
+              onClick={handleAndroidHome}
+              title="Home"
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <Circle className="w-4 h-4" />
+            </button>
+
+            {/* Recents / Menu (▢) */}
+            <button
+              type="button"
+              onClick={handleAndroidRecents}
+              title="Overview / Dropdown Menu"
+              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
+            >
+              <Square className="w-4 h-4" />
+            </button>
+          </aside>
+
+        </div>
+
       </main>
 
-      {/* Interactive Modals */}
+      {/* ======================================================== */}
+      {/* 3. INTERACTIVE MODALS (SCAN & PAY, SEND, STATEMENT, QR) */}
+      {/* ======================================================== */}
       <ScanPayModal
         isOpen={isScanOpen}
         onClose={() => setIsScanOpen(false)}
