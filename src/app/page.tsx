@@ -105,6 +105,8 @@ export default function HappyPocketApp() {
             amount: item.amount,
             type: item.amount > 0 ? 'salary' : (item.category === 'Groceries' ? 'grocery' : item.category === 'Transport & Fuel' ? 'fuel' : item.isInternalTransfer ? 'transfer' : 'other'),
             accountType: item.accountType,
+            theme: item.theme,
+            themeIcon: item.themeIcon,
             category: item.category,
           }));
 
@@ -139,34 +141,96 @@ export default function HappyPocketApp() {
     showToast('Logged out successfully');
   };
 
-  // Handle successful payments
-  const handlePaymentSuccess = (amount: number, merchant: string) => {
+  // Handle successful payments (auto-recorded to MongoDB Atlas in real time)
+  const handlePaymentSuccess = (amount: number, merchant: string, txDoc?: any) => {
     setBalance((prev) => Math.max(0, prev - amount));
     const newTx: DisplayTransaction = {
-      id: `tx_${Date.now()}`,
-      title: merchant,
+      id: txDoc?._id || txDoc?.id || `tx_${Date.now()}`,
+      title: txDoc?.cleanMerchant || merchant,
       rawTimeText: 'Just now',
-      timestamp: new Date().toISOString(),
+      timestamp: txDoc?.timestamp || new Date().toISOString(),
       amount: -amount,
-      type: 'other',
+      type: txDoc?.category === 'Groceries' ? 'grocery' : txDoc?.category === 'Transport & Fuel' ? 'fuel' : 'other',
+      accountType: txDoc?.accountType || 'Merchant / Business',
+      theme: txDoc?.theme,
+      themeIcon: txDoc?.themeIcon,
+      category: txDoc?.category,
     };
     setTransactions((prev) => [newTx, ...prev]);
-    showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}`);
+
+    // Keep raw engine analytics and category charts synced without reload
+    const rawEntry: RawTransaction = {
+      id: newTx.id,
+      accountId: 'acc_primary_sbi',
+      amount: -amount,
+      rawDescription: txDoc?.rawDescription || `WDL TFR UPI/DR/PAY/${merchant}/UPI`,
+      currency: 'INR',
+      timestamp: newTx.timestamp,
+      txMode: 'UPI',
+      upiRrn: txDoc?.upiRrn,
+      payeeName: merchant,
+      accountType: txDoc?.accountType || 'Merchant / Business',
+      theme: txDoc?.theme,
+      themeIcon: txDoc?.themeIcon,
+      isInternalTransfer: false,
+      isReimbursementOffset: false,
+      isRecurringAutoPay: false,
+    };
+    setExtractedRawTxs((prev) => {
+      const updated = [rawEntry, ...prev];
+      const analyzed = enrichAndAnalyzeTransactions(updated);
+      setAnalysisResult(analyzed);
+      return updated;
+    });
+
+    const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '🏷️'} ${txDoc.theme}]` : '';
+    showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}${themeMsg} • Recorded in Atlas!`);
   };
 
-  // Handle successful money transfers
-  const handleSendSuccess = (amount: number, recipient: string) => {
+  // Handle successful money transfers (auto-recorded to MongoDB Atlas in real time)
+  const handleSendSuccess = (amount: number, recipient: string, txDoc?: any) => {
     setBalance((prev) => Math.max(0, prev - amount));
+    const isSelf = txDoc?.isInternalTransfer || recipient.toLowerCase().includes('kotresh') || recipient.toLowerCase().includes('self');
     const newTx: DisplayTransaction = {
-      id: `tx_${Date.now()}`,
-      title: `Transfer to ${recipient}`,
+      id: txDoc?._id || txDoc?.id || `tx_${Date.now()}`,
+      title: txDoc?.cleanMerchant || recipient,
       rawTimeText: 'Just now',
-      timestamp: new Date().toISOString(),
+      timestamp: txDoc?.timestamp || new Date().toISOString(),
       amount: -amount,
-      type: 'transfer',
+      type: isSelf ? 'transfer' : 'other',
+      accountType: 'Personal',
+      theme: txDoc?.theme,
+      themeIcon: txDoc?.themeIcon,
+      category: isSelf ? 'Internal Transfer' : 'Reimbursement / Split',
     };
     setTransactions((prev) => [newTx, ...prev]);
-    showToast(`Sent ₹${amount.toLocaleString('en-IN')} to ${recipient}`);
+
+    const rawEntry: RawTransaction = {
+      id: newTx.id,
+      accountId: 'acc_primary_sbi',
+      amount: -amount,
+      rawDescription: txDoc?.rawDescription || `WDL TFR UPI/DR/TFR/${recipient}/UPI`,
+      currency: 'INR',
+      timestamp: newTx.timestamp,
+      txMode: 'UPI',
+      upiRrn: txDoc?.upiRrn,
+      payeeName: recipient,
+      accountType: 'Personal',
+      theme: txDoc?.theme,
+      themeIcon: txDoc?.themeIcon,
+      isInternalTransfer: isSelf,
+      isReimbursementOffset: !isSelf,
+      isRecurringAutoPay: false,
+    };
+    setExtractedRawTxs((prev) => {
+      const updated = [rawEntry, ...prev];
+      const analyzed = enrichAndAnalyzeTransactions(updated);
+      setAnalysisResult(analyzed);
+      return updated;
+    });
+
+    const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '👤'} ${txDoc.theme}]` : '';
+    showToast(`Sent ₹${amount.toLocaleString('en-IN')} to ${recipient}${themeMsg} • Recorded in Atlas!`);
   };
 
   // Handle imported statement items

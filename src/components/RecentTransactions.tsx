@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ShoppingCart, Fuel, Wallet, ArrowUpRight, ArrowDownLeft, Store, UserCheck } from 'lucide-react';
+import { ShoppingCart, Fuel, Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 
 export interface DisplayTransaction {
   id: string;
@@ -12,35 +12,43 @@ export interface DisplayTransaction {
   rawTimeText?: string;
   accountType?: 'Merchant / Business' | 'Personal';
   category?: string;
+  theme?: string;
+  themeIcon?: string;
 }
 
 export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [
   {
     id: 'tx_default_1',
-    title: 'Grocery',
+    title: 'Blinkit Quick Commerce',
     rawTimeText: 'Today, 10:24 AM',
     timestamp: new Date().toISOString(),
     amount: -1299.00,
     type: 'grocery',
     accountType: 'Merchant / Business',
+    theme: 'Groceries & Daily Essentials',
+    themeIcon: '🥦',
   },
   {
     id: 'tx_default_2',
-    title: 'Fuel',
+    title: 'Indian Oil Fuel Station',
     rawTimeText: 'Today, 08:15 AM',
     timestamp: new Date().toISOString(),
     amount: -650.00,
     type: 'fuel',
     accountType: 'Merchant / Business',
+    theme: 'Fuel & Petroleum',
+    themeIcon: '⛽',
   },
   {
     id: 'tx_default_3',
-    title: 'Salary',
+    title: 'Tech Corp India Salary',
     rawTimeText: 'Yesterday, 12:00 PM',
     timestamp: new Date(Date.now() - 86400000).toISOString(),
-    amount: 24000.00,
+    amount: 75000.00,
     type: 'salary',
     accountType: 'Merchant / Business',
+    theme: 'Corporate Salary / Income',
+    themeIcon: '💼',
   },
 ];
 
@@ -94,18 +102,18 @@ export default function RecentTransactions({
             let iconElement = <ShoppingCart className="w-5 h-5 stroke-[2.2]" />;
             let iconBg = 'bg-[#FFF3EC] text-[#F97316]';
 
-            if (tx.type === 'grocery') {
+            if (tx.type === 'grocery' || (tx.category === 'Groceries')) {
               iconElement = <ShoppingCart className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#FFF3EC] text-[#F97316]';
-            } else if (tx.type === 'fuel') {
+            } else if (tx.type === 'fuel' || (tx.category === 'Transport & Fuel')) {
               iconElement = <Fuel className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#FFF3EC] text-[#F97316]';
-            } else if (tx.type === 'salary') {
+            } else if (tx.type === 'salary' || isInflow) {
               iconElement = <Wallet className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#EBFBF3] text-[#10B981]';
-            } else if (isInflow) {
-              iconElement = <ArrowDownLeft className="w-5 h-5 stroke-[2.2]" />;
-              iconBg = 'bg-[#EBFBF3] text-[#10B981]';
+            } else if (tx.type === 'transfer' || tx.accountType === 'Personal') {
+              iconElement = <ArrowUpRight className="w-5 h-5 stroke-[2.2]" />;
+              iconBg = 'bg-[#EFF6FF] text-[#3B82F6]';
             } else {
               iconElement = <ArrowUpRight className="w-5 h-5 stroke-[2.2]" />;
               iconBg = 'bg-[#FFF3EC] text-[#F97316]';
@@ -141,9 +149,16 @@ export default function RecentTransactions({
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-0.5">
-                      {tx.rawTimeText || tx.timestamp}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
+                        {tx.rawTimeText || tx.timestamp}
+                      </p>
+                      {tx.theme && (
+                        <span className="text-[10px] text-slate-500 font-medium truncate max-w-[170px]">
+                          • {tx.themeIcon} {tx.theme}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

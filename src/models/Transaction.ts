@@ -15,6 +15,8 @@ export interface ITransactionDocument extends Document {
   cleanMerchant?: string;
   accountType: 'Merchant / Business' | 'Personal';
   direction?: 'DEBIT' | 'CREDIT';
+  theme?: string;
+  themeIcon?: string;
   category?: string;
   tier?: string;
   isRecurring?: boolean;
@@ -51,6 +53,8 @@ const TransactionSchema: Schema = new Schema(
       enum: ['DEBIT', 'CREDIT'], 
       default: 'DEBIT' 
     },
+    theme: { type: String, index: true },
+    themeIcon: { type: String },
     category: { type: String, default: 'Shopping & Discretionary', index: true },
     tier: { type: String, default: 'Discretionary', index: true },
     isRecurring: { type: Boolean, default: false },

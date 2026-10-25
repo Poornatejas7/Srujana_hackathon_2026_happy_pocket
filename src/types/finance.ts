@@ -39,11 +39,18 @@ export interface RawTransaction {
   terminalRef?: string;      // Core banking terminal reference e.g. "0097695162091 AT 40184"
   branchLocation?: string;   // Branch / City e.g. "DONIMALAI TOWNSHIP"
   accountType?: 'Merchant / Business' | 'Personal';
+  theme?: string;            // What the merchant is selling (e.g., "Music & Audio Streaming", "Clothing & Fashion Apparel")
+  themeIcon?: string;        // Emoji icon for theme
+  isInternalTransfer?: boolean;
+  isReimbursementOffset?: boolean;
+  isRecurringAutoPay?: boolean;
 }
 
 export interface EnrichedTransaction extends RawTransaction {
   cleanMerchant: string;
   accountType: 'Merchant / Business' | 'Personal';
+  theme?: string;
+  themeIcon?: string;
   category: Category;
   tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income';
   isRecurring: boolean;

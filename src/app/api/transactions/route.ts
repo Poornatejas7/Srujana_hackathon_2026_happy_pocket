@@ -26,6 +26,12 @@ function cleanAndCategorizeTx(t: any) {
   if (!doc.accountType) {
     doc.accountType = classification.accountType;
   }
+  if (!doc.theme) {
+    doc.theme = classification.theme;
+  }
+  if (!doc.themeIcon) {
+    doc.themeIcon = classification.themeIcon;
+  }
   if (!doc.category) {
     doc.category = classification.category;
   }

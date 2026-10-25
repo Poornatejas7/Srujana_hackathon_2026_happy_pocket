@@ -141,9 +141,16 @@ export default function HistoryTab({ transactions, onOpenUpload }: HistoryTabPro
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      {tx.rawTimeText || tx.timestamp}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-[10px] text-slate-400 font-medium">
+                        {tx.rawTimeText || tx.timestamp}
+                      </p>
+                      {tx.theme && (
+                        <span className="text-[10px] text-slate-500 font-medium truncate max-w-[200px]">
+                          • {tx.themeIcon} {tx.theme}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
