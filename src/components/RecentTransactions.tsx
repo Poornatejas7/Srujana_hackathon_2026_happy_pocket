@@ -22,41 +22,7 @@ export interface DisplayTransaction {
   confidenceScore?: number;
 }
 
-export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [
-  {
-    id: 'tx_default_1',
-    title: 'Blinkit Quick Commerce',
-    rawTimeText: 'Today, 10:24 AM',
-    timestamp: new Date().toISOString(),
-    amount: -1299.00,
-    type: 'grocery',
-    accountType: 'Merchant / Business',
-    theme: 'Groceries & Daily Essentials',
-    themeIcon: '🥦',
-  },
-  {
-    id: 'tx_default_2',
-    title: 'Indian Oil Fuel Station',
-    rawTimeText: 'Today, 08:15 AM',
-    timestamp: new Date().toISOString(),
-    amount: -650.00,
-    type: 'fuel',
-    accountType: 'Merchant / Business',
-    theme: 'Fuel & Petroleum',
-    themeIcon: '⛽',
-  },
-  {
-    id: 'tx_default_3',
-    title: 'Tech Corp India Salary',
-    rawTimeText: 'Yesterday, 12:00 PM',
-    timestamp: new Date(Date.now() - 86400000).toISOString(),
-    amount: 75000.00,
-    type: 'salary',
-    accountType: 'Merchant / Business',
-    theme: 'Corporate Salary / Income',
-    themeIcon: '💼',
-  },
-];
+export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [];
 
 interface RecentTransactionsProps {
   transactions?: DisplayTransaction[];
@@ -97,8 +63,14 @@ export default function RecentTransactions({
       {/* Transaction List */}
       <div className="space-y-3 sm:space-y-3.5">
         {displayItems.length === 0 ? (
-          <div className="py-6 text-center text-xs text-slate-400">
-            No transactions recorded yet in MongoDB.
+          <div className="py-7 text-center space-y-1.5">
+            <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-500 mx-auto flex items-center justify-center">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-slate-800">No transactions recorded yet</p>
+            <p className="text-[11px] text-slate-400 max-w-[240px] mx-auto leading-relaxed">
+              Your ledger is clean. Tap <strong className="text-orange-600">Scan &amp; Pay</strong> or <strong className="text-orange-600">Send Money</strong> above to add your own transaction.
+            </p>
           </div>
         ) : (
           displayItems.map((tx) => {

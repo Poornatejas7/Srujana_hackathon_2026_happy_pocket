@@ -41,10 +41,10 @@ export default function ScanPayModal({
   balance = 10000.00,
   onPaymentSuccess,
 }: ScanPayModalProps) {
-  const [selectedMerchant, setSelectedMerchant] = useState<SimulatedAccount | null>(PRESET_MERCHANT_ACCOUNTS[0]); // default Amazon India
+  const [selectedMerchant, setSelectedMerchant] = useState<SimulatedAccount | null>(null);
   const [customQrInput, setCustomQrInput] = useState<string>('');
   const [userSelectedCategory, setUserSelectedCategory] = useState<Category | null>(null);
-  const [amount, setAmount] = useState<string>('850.00');
+  const [amount, setAmount] = useState<string>('');
   const [upiPin, setUpiPin] = useState<string>('1234');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -414,6 +414,7 @@ export default function ScanPayModal({
                       <input
                         type="number"
                         step="0.01"
+                        placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-base font-bold text-white focus:outline-none focus:border-orange-500 font-sans"
@@ -457,7 +458,7 @@ export default function ScanPayModal({
                   <span>Processing Core Banking UPI Switch...</span>
                 ) : (
                   <>
-                    <span>Pay ₹{amount} to {activeMerchantInfo?.name}</span>
+                    <span>Pay ₹{amount || '0.00'} {activeMerchantInfo ? `to ${activeMerchantInfo.name}` : ''}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

@@ -32,7 +32,7 @@ export default function SendMoneyModal({
 }: SendMoneyModalProps) {
   const [selectedContact, setSelectedContact] = useState<SimulatedAccount>(PRESET_PERSONAL_ACCOUNTS[0]);
   const [customRecipient, setCustomRecipient] = useState('');
-  const [amount, setAmount] = useState('500');
+  const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [upiPin, setUpiPin] = useState('1234');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -292,6 +292,8 @@ export default function SendMoneyModal({
                   </span>
                   <input
                     type="number"
+                    step="0.01"
+                    placeholder="0.00"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-base font-bold text-slate-800 focus:outline-none focus:border-[#F97316]"
@@ -348,7 +350,7 @@ export default function SendMoneyModal({
                 <span>Settling via UPI Switch...</span>
               ) : (
                 <>
-                  <span>Send ₹{amount}</span>
+                  <span>Send ₹{amount || '0.00'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
