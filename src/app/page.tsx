@@ -26,7 +26,8 @@ import {
   AlertCircle,
   Bot,
   ReceiptIndianRupee,
-  Repeat
+  Repeat,
+  Columns
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -48,20 +49,21 @@ import HistoryTab from '@/components/HistoryTab';
 import ProfileTab from '@/components/ProfileTab';
 import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
+import { MultiAppSimulator, PaymentExecutionParams } from '@/components/MultiAppSimulator';
 import { RawTransaction, Category } from '@/types/finance';
 import { parseBankStatementLines } from '@/lib/pdfParser';
 import { enrichAndAnalyzeTransactions } from '@/lib/engine';
 
 export default function HappyPocketApp() {
-  const [balance, setBalance] = useState<number>(14524.91);
+  const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<DisplayTransaction[]>([]);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
-  const [desktopMode, setDesktopMode] = useState<'phone' | 'wide'>('phone');
+  const [desktopMode, setDesktopMode] = useState<'phone' | 'wide' | 'split'>('split');
   
   // Financial engine state
   const [extractedRawTxs, setExtractedRawTxs] = useState<RawTransaction[]>([]);
   const [analysisResult, setAnalysisResult] = useState<ReturnType<typeof enrichAndAnalyzeTransactions> | null>(null);
-  const [analyticsSubTab, setAnalyticsSubTab] = useState<'insights' | 'ledger' | 'subscriptions' | 'tax' | 'sandbox'>('insights');
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'insights' | 'expense_tracker' | 'smart_insights' | 'raw_transactions' | 'ledger' | 'subscriptions' | 'tax' | 'sandbox'>('insights');
   const [selectedLedgerFilter, setSelectedLedgerFilter] = useState<string>('all');
   const [userOverrides, setUserOverrides] = useState<Record<string, { category: Category; tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income' }>>({});
   const [isDbLoading, setIsDbLoading] = useState<boolean>(true);
@@ -129,16 +131,21 @@ export default function HappyPocketApp() {
           setExtractedRawTxs(rawList);
           syncTransactionsWithEngine(rawList);
 
-          // Calculate real balance from account transactions or standard salary opening balance
+          // Calculate real balance directly from DB transactions (sum of all inflows & outflows)
           const netChange = rawList.reduce((acc, curr) => acc + curr.amount, 0);
-          const computedBalance = netChange > 0 ? netChange : Math.max(12450.00, 100000.00 + netChange);
-          setBalance(computedBalance);
+          setBalance(netChange);
         } else {
+          setExtractedRawTxs([]);
           setTransactions([]);
+          setAnalysisResult(enrichAndAnalyzeTransactions([]));
+          setBalance(0);
         }
       } catch (err) {
         console.error('Failed to load transactions from MongoDB:', err);
+        setExtractedRawTxs([]);
         setTransactions([]);
+        setAnalysisResult(enrichAndAnalyzeTransactions([]));
+        setBalance(0);
       } finally {
         setIsDbLoading(false);
       }
@@ -300,29 +307,31 @@ export default function HappyPocketApp() {
     showToast(`Imported ${imported.length} statement records!`);
   };
 
-  // Live UPI Phone Payment Simulator Trigger
-  const handleLivePaymentSim = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(simAmount);
+  // Multi-App Simulator Execution Handler (Google Pay, PhonePe, Paytm, CRED, Netflix, Spotify, Swiggy, Blinkit)
+  const handleMultiAppPayment = (params: PaymentExecutionParams) => {
+    const amt = params.amount;
     if (!amt || isNaN(amt)) return;
 
     setBalance(prev => Math.max(0, prev - amt));
     const rrn = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    const vpa = `${simPayee.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`;
+    const vpa = `${params.payee.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`;
+
     const newTx: RawTransaction = {
-      id: `tx_live_${Date.now()}`,
+      id: `tx_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       accountId: 'acc_primary_sbi',
       amount: -amt,
-      rawDescription: `WDL TFR UPI/DR/${rrn}/${simPayee.toUpperCase()}/UTIB/${vpa}/UPI`,
+      rawDescription: params.rawDescription || `${params.method}/DR/${rrn}/${params.payee.toUpperCase()}/${params.app.toUpperCase()}`,
       currency: 'INR',
       timestamp: new Date().toISOString(),
-      txMode: 'UPI',
+      txMode: params.method === 'AutoPay Mandate' ? 'MANDATE' : params.method === 'Card' ? 'POS' : 'UPI',
       upiRrn: rrn,
-      payeeName: simPayee,
-      bankCode: 'UTIB',
+      payeeName: params.payee,
+      bankCode: 'OKAXIS',
       vpaHandle: vpa,
-      remark: 'UPI Live Payment',
-      terminalRef: 'LIVE POS AT 40184'
+      category: params.category as any,
+      remark: `${params.method} via ${params.app}`,
+      isRecurring: params.isRecurring || false,
+      isInternalTransfer: params.isInternalTransfer || false
     };
 
     const updated = [newTx, ...extractedRawTxs];
@@ -330,8 +339,23 @@ export default function HappyPocketApp() {
     syncTransactionsWithEngine(updated);
     persistToDatabase(newTx);
 
-    showToast(`⚡ Paid ₹${amt} to ${simPayee} via ${simApp}! Auto-reflected in app.`);
+    showToast(`⚡ Paid ₹${amt} via ${params.app}! Auto-reflected in Happy Pocket.`);
     setIsPhoneSimOpen(false);
+  };
+
+  // Live UPI Phone Payment Simulator Trigger (Legacy fallback)
+  const handleLivePaymentSim = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(simAmount);
+    if (!amt || isNaN(amt)) return;
+
+    handleMultiAppPayment({
+      app: simApp,
+      payee: simPayee,
+      amount: amt,
+      category: 'Food & Dining',
+      method: 'UPI'
+    });
   };
 
   // Account Aggregator Workflow Handlers
@@ -420,67 +444,49 @@ export default function HappyPocketApp() {
           </span>
         </div>
 
-        {/* Action Controls & Simulator Buttons */}
+        {/* View Switcher Controls */}
         <div className="flex items-center gap-2">
-          {/* Simulate Live Payment */}
-          <button
-            type="button"
-            onClick={() => setIsPhoneSimOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#F97316] font-bold transition border border-orange-200 shadow-xs cursor-pointer"
-            title="Simulate making a payment on GPay/PhonePe and watch it auto-reflect in app!"
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Simulate Live Payment</span>
-          </button>
-
-          {/* Connect via AA */}
-          <button
-            type="button"
-            onClick={() => setIsAAModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold transition border border-emerald-200 shadow-xs cursor-pointer"
-            title="Connect bank accounts via RBI Account Aggregator"
-          >
-            <Zap className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Connect via AA</span>
-          </button>
-
-          {/* Import Statement */}
-          <button
-            type="button"
-            onClick={() => setIsUploadOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold transition shadow-xs cursor-pointer"
-          >
-            <Receipt className="w-3.5 h-3.5" />
-            <span>Upload Statement</span>
-          </button>
-
-          <span className="h-4 w-px bg-slate-200 mx-1" />
 
           {/* View Switcher Toggle */}
           <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
             <button
               type="button"
+              onClick={() => setDesktopMode('split')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
+                desktopMode === 'split'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Split Screen: Payment Simulator on Left, Solution on Right"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span>Split Screen (Simulator + Solution)</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setDesktopMode('phone')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
                 desktopMode === 'phone'
                   ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
+              title="View only the UPI Payment Simulator inside a mobile phone chassis"
             >
-              <Smartphone className="w-3 h-3 text-orange-500" />
-              <span>Mobile View</span>
+              <Smartphone className="w-3.5 h-3.5 text-orange-500" />
+              <span>Simulator (Mobile View)</span>
             </button>
             <button
               type="button"
               onClick={() => setDesktopMode('wide')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
                 desktopMode === 'wide'
                   ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
+              title="View only the Happy Pocket Financial Intelligence Solution dashboard"
             >
-              <Monitor className="w-3 h-3 text-orange-500" />
-              <span>Full Dashboard</span>
+              <Monitor className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Solution (Full Dashboard)</span>
             </button>
           </div>
         </div>
@@ -490,177 +496,22 @@ export default function HappyPocketApp() {
       <main className="flex-1 flex flex-col items-center justify-center p-0 sm:p-4 md:p-8">
         
         {/* ======================================================== */}
-        {/* VIEW 1: PHONE MOCKUP VIEW (Pixel-perfect Mobile App) */}
+        {/* VIEW 1: AUTHENTIC ANDROID MOBILE PHONE PAYMENT SIMULATOR */}
         {/* ======================================================== */}
-        {(desktopMode === 'phone' || typeof window === 'undefined') && (
-          <div className="w-full max-w-[420px] mx-auto md:my-4 transition-all duration-300">
-            {/* Phone outer bezel on desktop / clean on mobile */}
-            <div className="w-full bg-[#EEF2F6] md:bg-white md:p-3 md:rounded-[52px] md:shadow-[0_25px_70px_rgba(15,23,42,0.14)] md:border-[8px] md:border-slate-800/90 relative overflow-hidden">
+        {desktopMode === 'phone' && (
+          <div className="w-full max-w-[390px] mx-auto md:my-4 transition-all duration-300">
+            {/* Android Device Outer Bezel with Sleek Rounded Corners & Volume/Power Buttons */}
+            <div className="w-full bg-[#1A1F2C] p-2 rounded-[44px] shadow-[0_25px_70px_rgba(11,15,25,0.4)] border-[6px] border-[#2A3142] relative">
               
-              {/* Phone Inner Screen Container */}
-              <div className="w-full bg-[#EEF2F6] min-h-[820px] rounded-[36px] sm:rounded-[44px] flex flex-col justify-between overflow-hidden relative">
-                
-                {/* 1. Mobile Status Bar (9:41, Signal, Battery) */}
-                <div className="w-full pt-3 px-7 flex items-center justify-between text-slate-800 select-none">
-                  <span className="font-bold text-sm tracking-tight font-sans">9:41</span>
-                  
-                  {/* Status Bar Icons */}
-                  <div className="flex items-center gap-1.5 text-slate-800">
-                    <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor">
-                      <rect x="0" y="8" width="3" height="4" rx="1" />
-                      <rect x="4.5" y="5" width="3" height="7" rx="1" />
-                      <rect x="9" y="2.5" width="3" height="9.5" rx="1" />
-                      <rect x="13.5" y="0" width="3" height="12" rx="1" />
-                    </svg>
-                    <Wifi className="w-4 h-4 stroke-[2.4]" />
-                    <div className="w-5 h-2.5 rounded-[4px] border-[1.5px] border-slate-800 p-0.5 flex items-center">
-                      <div className="w-full h-full bg-slate-800 rounded-[1.5px]" />
-                    </div>
-                  </div>
-                </div>
+              {/* Android Top Micro Speaker Slit */}
+              <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-16 h-1 bg-[#2D3748] rounded-full z-20" />
 
-                {/* 2. App Header (Mascot & User Avatar) */}
-                <div className="px-6 pt-3 pb-2 flex items-center justify-between">
-                  {/* Left: Mascot Character */}
-                  <div className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform" onClick={() => setActiveTab('home')}>
-                    <HappyPocketLogo size={58} />
-                  </div>
-
-                  {/* Right: Circular User Avatar */}
-                  <div 
-                    onClick={() => setActiveTab('advisor')}
-                    className="relative w-11 h-11 rounded-full overflow-hidden border-2 border-white shadow-md cursor-pointer hover:ring-2 hover:ring-orange-400 transition"
-                  >
-                    <Image
-                      src="/avatar.jpg"
-                      alt="User Avatar"
-                      fill
-                      sizes="44px"
-                      priority
-                      className="object-cover"
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Screen Scrollable Body Content */}
-                <div className="px-5 py-2 flex-1 space-y-4 sm:space-y-5 overflow-y-auto max-h-[660px] pb-24">
-                  {activeTab === 'home' && (
-                    <>
-                      {/* Signature Account Card */}
-                      <AccountCard
-                        accountName="Savings Account"
-                        accountNumberMask="•••• 5274"
-                        balance={balance}
-                      />
-
-                      {/* 3 Quick Action Buttons */}
-                      <ActionButtons
-                        onScanPayClick={handleScanPay}
-                        onSendMoneyClick={handleSendMoney}
-                        onTransactionsClick={handleTransactionsClick}
-                      />
-
-                      {/* Financial Distortion Deduction Pill */}
-                      <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-[#0A172E] text-white shadow-md space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                            True Living Outflow
-                          </span>
-                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
-                            Zero Distortion
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between">
-                          <div>
-                            <div className="text-lg font-bold font-mono">
-                              ₹{analysisResult ? analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '31,540.00'}
-                            </div>
-                            <div className="text-[10px] text-slate-400">
-                              Excludes self-transfers & paired refunds
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setDesktopMode('wide')}
-                            className="text-[11px] text-orange-400 hover:text-orange-300 font-bold underline cursor-pointer"
-                          >
-                            Analytics &rarr;
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Recent Transactions List */}
-                      <RecentTransactions
-                        transactions={transactions.slice(0, 5)}
-                        onViewAll={() => setDesktopMode('wide')}
-                      />
-                    </>
-                  )}
-
-                  {activeTab === 'expense' && (
-                    <ExpenseTrackerTab transactions={extractedRawTxs} />
-                  )}
-
-                  {activeTab === 'insights' && (
-                    <InsightsTab transactions={extractedRawTxs} />
-                  )}
-
-                  {activeTab === 'payments' && (
-                    <PaymentsTab
-                      onScanClick={handleScanPay}
-                      onSendClick={handleSendMoney}
-                    />
-                  )}
-
-                  {activeTab === 'history' && (
-                    <HistoryTab
-                      transactions={transactions}
-                      onOpenUpload={() => setIsUploadOpen(true)}
-                    />
-                  )}
-
-                  {activeTab === 'profile' && (
-                    <ProfileTab 
-                      onShowQR={() => setIsQrOpen(true)} 
-                    />
-                  )}
-
-                  {activeTab === 'subscriptions' && (
-                    <SubscriptionsTab
-                      subscriptions={analysisResult?.subscriptions || []}
-                      onCancelSubscription={handleCancelMandate}
-                    />
-                  )}
-
-                  {activeTab === 'advisor' && (
-                    <AIAdvisorTab
-                      trueLivingExpenses={analysisResult ? analysisResult.kpis.trueLivingExpenses : 31540}
-                      monthlyCommitments={analysisResult ? analysisResult.kpis.monthlyRecurringCommitments : 768}
-                      rawOutflows={analysisResult ? analysisResult.kpis.rawOutflows : 50740}
-                      noiseDeducted={analysisResult ? (analysisResult.kpis.rawOutflows - analysisResult.kpis.trueLivingExpenses) : 19200}
-                    />
-                  )}
-
-                  {activeTab === 'tax' && (
-                    <TaxFinderTab />
-                  )}
-
-                  {activeTab === 'wealth' && (
-                    <MultiBankWealthTab
-                      onConnectAA={() => setIsAAModalOpen(true)}
-                      onUploadStatement={() => setIsUploadOpen(true)}
-                    />
-                  )}
-                </div>
-
-                {/* 4. Bottom Navigation Bar */}
-                <div className="absolute bottom-0 inset-x-0 z-30">
-                  <BottomNav
-                    activeTab={activeTab}
-                    onChangeTab={(t) => setActiveTab(t)}
-                  />
-                </div>
-
+              {/* Android Inner AMOLED Screen */}
+              <div className="w-full bg-[#0B0F19] rounded-[36px] overflow-hidden flex flex-col min-h-[680px]">
+                <MultiAppSimulator
+                  balance={balance}
+                  onExecutePayment={handleMultiAppPayment}
+                />
               </div>
             </div>
           </div>
@@ -670,127 +521,534 @@ export default function HappyPocketApp() {
         {/* VIEW 2: RESPONSIVE WIDE DASHBOARD VIEW (Desktop Full Screen) */}
         {/* ======================================================== */}
         {desktopMode === 'wide' && (
-          <div className="w-full max-w-6xl mx-auto space-y-6 transition-all duration-300 py-4 px-4 sm:px-6">
+          <div className="w-full max-w-7xl mx-auto space-y-6 transition-all duration-300 py-4 px-4 sm:px-6">
             
-            {/* Top Brand Banner */}
-            <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-[32px] bg-white border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-              <div className="flex items-center gap-4">
-                <HappyPocketLogo size={56} />
-                <div>
-                  <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                    Happy Pocket Intelligence Center
-                  </h1>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Zero-Distortion Living Expense Discovery, Subscription Killer & Multi-Bank Wealth Platform
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPhoneSimOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition shadow-sm cursor-pointer"
-                >
-                  <Smartphone className="w-4 h-4" />
-                  <span>Simulate Phone Payment</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAAModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-sm cursor-pointer"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>Connect AA</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsUploadOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-sm cursor-pointer"
-                >
-                  <Receipt className="w-4 h-4" />
-                  <span>Upload PDF</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Split Grid: Left Account & KPIs / Right Interactive Analytics */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Desktop Chassis Card - Pure Financial Intelligence Solution */}
+            <div className="bg-white rounded-[32px] p-6 sm:p-8 shadow-[0_15px_50px_rgba(15,23,42,0.08)] border border-slate-200/90 space-y-6">
               
-              {/* Left Column (5 Cols): Card, Action Buttons & Deduction Highlights */}
-              <div className="lg:col-span-5 space-y-5">
-                <AccountCard
-                  accountName="Savings Account (Primary)"
-                  accountNumberMask="•••• 5274"
-                  balance={balance}
-                />
-
-                <div className="p-1 bg-white rounded-[26px] border border-slate-100 shadow-sm">
-                  <ActionButtons
-                    onScanPayClick={handleScanPay}
-                    onSendMoneyClick={handleSendMoney}
-                    onTransactionsClick={handleTransactionsClick}
-                  />
+              {/* Browser / Desktop Window Top Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-rose-400 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block" />
+                  </div>
+                  <div className="ml-3 px-3 py-1 rounded-lg bg-slate-100 text-slate-500 font-mono text-xs flex items-center gap-1.5 border border-slate-200/60">
+                    <Lock className="w-3 h-3 text-slate-400" />
+                    <span>app.happypocket.in/dashboard/insights</span>
+                  </div>
                 </div>
 
-                {/* Anti-Distortion Noise Deductions Box */}
-                <div className="rounded-[28px] bg-gradient-to-br from-slate-900 to-[#0A172E] p-6 text-white shadow-lg space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Anti-Distortion Engine
-                    </span>
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
-                      Active
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsAAModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition border border-emerald-200 shadow-xs cursor-pointer"
+                    title="Connect bank accounts via RBI Account Aggregator"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Connect via AA</span>
+                  </button>
 
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                      <span className="text-[11px] text-slate-400 block">Self-Transfers Filtered</span>
-                      <span className="text-sm font-bold font-mono text-white mt-1 block">
-                        ₹{analysisResult ? analysisResult.kpis.internalTransfersDetected.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '15,000.00'}
-                      </span>
-                      <span className="text-[10px] text-emerald-400">Excluded from spend</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                      <span className="text-[11px] text-slate-400 block">Refunds Reconciled</span>
-                      <span className="text-sm font-bold font-mono text-cyan-300 mt-1 block">
-                        ₹{analysisResult ? analysisResult.kpis.refundsReconciled.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '4,200.00'}
-                      </span>
-                      <span className="text-[10px] text-cyan-400">Paired with purchase</span>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsUploadOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                    title="Upload bank statement PDF"
+                  >
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Upload Statement</span>
+                  </button>
 
-                  <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                  <span className="h-4 w-px bg-slate-200 mx-1" />
+
+                  <div className="flex items-center gap-1.5">
+                    <HappyPocketLogo size={28} />
+                    <span className="font-extrabold text-sm text-slate-900 tracking-tight">Happy Pocket Financial Intelligence</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Problem Statement Header Banner */}
+              <div className="bg-gradient-to-br from-[#0A172E] to-slate-900 rounded-[28px] p-6 text-white shadow-xl space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-white/10 text-emerald-400">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
                     <div>
-                      <span className="text-[11px] text-slate-400 block">True Living Outflow</span>
-                      <span className="text-base font-bold font-mono text-white">
-                        ₹{analysisResult ? analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '31,540.00'}
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">
+                        Problem Statement Solution
                       </span>
+                      <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                        Zero-Distortion Financial Visibility Engine
+                      </h3>
+                    </div>
+                  </div>
+                  <span className="text-xs bg-emerald-500/20 text-emerald-300 font-mono px-3 py-1 rounded-full border border-emerald-500/30 font-bold">
+                    Problem Solved
+                  </span>
+                </div>
+
+                {/* 3 Core Anti-Distortion KPI Highlights */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <span className="text-[11px] text-slate-400 block font-bold uppercase tracking-wider">Raw Statement Outflows</span>
+                    <div className="text-2xl font-black font-mono text-white mt-1">
+                      ₹{analysisResult ? analysisResult.kpis.rawOutflows.toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'}
+                    </div>
+                    <span className="text-xs text-slate-400 mt-1 block">Includes all noise</span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                    <span className="text-[11px] text-rose-300 block font-bold uppercase tracking-wider">Noise Deductions</span>
+                    <div className="text-2xl font-black font-mono text-rose-400 mt-1">
+                      -₹{analysisResult ? (analysisResult.kpis.rawOutflows - analysisResult.kpis.trueLivingExpenses).toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'}
+                    </div>
+                    <span className="text-xs text-rose-300 mt-1 block">Self-transfers & refunds</span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30">
+                    <span className="text-[11px] text-emerald-300 block font-bold uppercase tracking-wider">True Living Expenses</span>
+                    <div className="text-2xl font-black font-mono text-emerald-300 mt-1">
+                      ₹{analysisResult ? analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'}
+                    </div>
+                    <span className="text-xs text-emerald-400 font-bold mt-1 block">100% distortion-free</span>
+                  </div>
+                </div>
+              </div>
+                
+              {/* SubTab Switcher for Problem Statement Solution */}
+              <div className="flex items-center gap-1.5 p-1.5 bg-slate-50 rounded-2xl border border-slate-200/80 overflow-x-auto">
+                {[
+                  { id: 'insights', label: 'True Living Discovery' },
+                  { id: 'raw_transactions', label: `Raw Statements / DB (${extractedRawTxs.length})` },
+                  { id: 'ledger', label: `Normalized Ledger (${analysisResult ? analysisResult.enriched.length : transactions.length})` },
+                  { id: 'expense_tracker', label: 'Expense Tracker' },
+                  { id: 'smart_insights', label: 'Mandates & Better Swaps' },
+                  { id: 'subscriptions', label: `AutoPay Mandates (${analysisResult ? analysisResult.subscriptions.length : 2})` },
+                  { id: 'tax', label: 'Tax Deductions' },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setAnalyticsSubTab(t.id as any)}
+                    className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                      analyticsSubTab === t.id
+                        ? 'bg-orange-500 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Pane 1: Expense Tracker */}
+              {analyticsSubTab === ('expense_tracker' as any) && (
+                <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
+                  <ExpenseTrackerTab transactions={extractedRawTxs} />
+                </div>
+              )}
+
+              {/* Tab Pane 2: Smart Insights */}
+              {analyticsSubTab === ('smart_insights' as any) && (
+                <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
+                  <InsightsTab transactions={extractedRawTxs} />
+                </div>
+              )}
+
+              {/* Tab Pane 3: Subscriptions Killer */}
+              {analyticsSubTab === 'subscriptions' && (
+                <SubscriptionsTab
+                  subscriptions={analysisResult?.subscriptions || []}
+                  onCancelSubscription={handleCancelMandate}
+                />
+              )}
+
+              {/* Tab Pane 4: Tax Finder */}
+              {analyticsSubTab === 'tax' && (
+                <TaxFinderTab />
+              )}
+
+              {/* Tab Pane 5: Normalized Ledger Table */}
+              {analyticsSubTab === 'ledger' && (
+                <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      Real Database Ledger Stream
+                    </h4>
+                    <select
+                      value={selectedLedgerFilter}
+                      onChange={e => setSelectedLedgerFilter(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-1.5 text-slate-700 focus:outline-none"
+                    >
+                      <option value="all">All ({analysisResult ? analysisResult.enriched.length : transactions.length})</option>
+                      <option value="recurring">Recurring Only</option>
+                      <option value="transfer">Self-Transfers Only</option>
+                      <option value="refund">Refunds Only</option>
+                      <option value="split">Shared Splits Only</option>
+                    </select>
+                  </div>
+
+                  <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold sticky top-0">
+                        <tr>
+                          <th className="py-2.5 px-3">Date</th>
+                          <th className="py-2.5 px-3">Merchant</th>
+                          <th className="py-2.5 px-3">Category</th>
+                          <th className="py-2.5 px-3 text-right">Amount</th>
+                          <th className="py-2.5 px-3 text-center">Engine Treatment</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredLedger.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                            <td className="py-2 px-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                              {new Date(tx.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                            </td>
+                            <td className="py-2 px-3 max-w-[140px] truncate font-bold text-slate-900">
+                              {tx.payeeName || tx.cleanMerchant}
+                            </td>
+                            <td className="py-2 px-3 whitespace-nowrap">
+                              <span className="font-medium text-slate-700">{tx.category}</span>
+                            </td>
+                            <td className={`py-2 px-3 text-right font-bold font-mono ${tx.amount > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                              {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount).toLocaleString('en-IN')}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              {tx.isInternalTransfer ? (
+                                <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                                  Excluded (Self)
+                                </span>
+                              ) : tx.isRecurring ? (
+                                <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                  Recurring Drain
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                                  Clean Living
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Pane: Raw Statement Transactions Stream */}
+              {analyticsSubTab === 'raw_transactions' && (
+                <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                          Raw Statement Stream (Unfiltered / Distortion Present)
+                        </h4>
+                        <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full font-mono">
+                          {extractedRawTxs.length} Raw Records
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        This is the un-sanitized log directly from the bank or live simulator. Notice how self-transfers and refund round-trips distort your perception of total spending.
+                      </p>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block">Noise Deduction</span>
-                      <span className="text-xs font-bold font-mono text-emerald-400">
-                        -₹{analysisResult ? (analysisResult.kpis.rawOutflows - analysisResult.kpis.trueLivingExpenses).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '19,200.00'}
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Gross Outflow</span>
+                      <span className="text-sm font-black font-mono text-slate-900">
+                        ₹{extractedRawTxs.filter(t => t.amount < 0).reduce((acc, t) => acc + Math.abs(t.amount), 0).toLocaleString('en-IN')}
                       </span>
                     </div>
                   </div>
+
+                  <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold sticky top-0">
+                        <tr>
+                          <th className="py-2.5 px-3">Date</th>
+                          <th className="py-2.5 px-3">Raw Description / Payee</th>
+                          <th className="py-2.5 px-3">Type</th>
+                          <th className="py-2.5 px-3 text-right">Raw Amount</th>
+                          <th className="py-2.5 px-3 text-center">Problem / Distortion Flag</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {extractedRawTxs.map((tx) => {
+                          const isDebit = tx.amount < 0;
+                          const isTransfer = tx.isInternalTransfer || (tx.category === 'Internal Transfer');
+                          const isRefund = tx.category === 'Reimbursement / Split' || !isDebit;
+                          const isRecurring = tx.isRecurring;
+                          return (
+                            <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                              <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                                {new Date(tx.timestamp || Date.now()).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                              </td>
+                              <td className="py-2.5 px-3 max-w-[200px] truncate">
+                                <div className="font-bold text-slate-900">{tx.rawDescription || tx.payeeName || tx.cleanMerchant}</div>
+                                <div className="text-[10px] text-slate-400 font-mono">{tx.upiRrn || tx.id}</div>
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  !isDebit ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {isDebit ? 'DEBIT' : 'CREDIT'}
+                                </span>
+                              </td>
+                              <td className={`py-2.5 px-3 text-right font-black font-mono ${
+                                !isDebit ? 'text-emerald-600' : 'text-slate-900'
+                              }`}>
+                                {!isDebit ? '+' : '-'}₹{Math.abs(tx.amount).toLocaleString('en-IN')}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                {isTransfer ? (
+                                  <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
+                                    ⚠️ Noise: Self-Transfer
+                                  </span>
+                                ) : isRefund ? (
+                                  <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                                    🔄 Split / Offset
+                                  </span>
+                                ) : isRecurring ? (
+                                  <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold">
+                                    🔁 Hidden Recurring Drain
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                                    Standard Expense
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Pane 6: Insights Default */}
+              {analyticsSubTab === 'insights' && (
+                <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-orange-50/60 border border-orange-100">
+                      <span className="text-[11px] font-bold text-orange-800 uppercase block tracking-wider">Monthly Recurring Drain</span>
+                      <div className="text-2xl font-bold font-mono text-orange-700 mt-1">
+                        ₹{analysisResult ? analysisResult.kpis.monthlyRecurringCommitments.toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'} /mo
+                      </div>
+                      <span className="text-xs text-orange-600 mt-1 block">Fixed annual burden of ₹{analysisResult ? (analysisResult.kpis.monthlyRecurringCommitments * 12).toLocaleString('en-IN') : '0'}</span>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                      <span className="text-[11px] font-bold text-emerald-800 uppercase block tracking-wider">True Living Ratio</span>
+                      <div className="text-2xl font-bold font-mono text-emerald-700 mt-1">
+                        {analysisResult && analysisResult.kpis.rawOutflows > 0 ? ((analysisResult.kpis.trueLivingExpenses / analysisResult.kpis.rawOutflows) * 100).toFixed(1) : '100.0'}%
+                      </div>
+                      <span className="text-xs text-emerald-600 mt-1 block">100% clean living expenses</span>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Why Happy Pocket Solves Financial Fog:</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Traditional UPI apps (GPay, PhonePe) display transaction logs as raw streams where moving money between your own accounts or returning an e-commerce order appears as massive spending. <strong>Happy Pocket normalizes, dedupes, and isolates true living expenses</strong> with zero manual bookkeeping.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* VIEW 3: SPLIT SCREEN VIEW (Payment Simulation vs Problem Statement Solution) */}
+        {/* ======================================================== */}
+        {desktopMode === 'split' && (
+          <div className="w-full max-w-[1880px] mx-auto space-y-4 transition-all duration-300 py-1 px-2 sm:px-4">
+            
+            {/* Split Screen Row: Mobile Screen (Left) + Vertical Divider + Desktop App Dashboard (Right) */}
+            <div className="flex flex-col lg:flex-row items-start gap-6 w-full">
+              
+              {/* ======================================================== */}
+              {/* LEFT BOARD: COMPACT MOBILE SCREEN SIMULATOR */}
+              {/* ======================================================== */}
+              <div className="w-full lg:w-[350px] shrink-0 flex flex-col items-center">
+                
+                {/* Board Label */}
+                <div className="w-full max-w-[340px] mb-2 flex items-center justify-between px-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
+                    <span className="text-xs font-black tracking-wider uppercase text-slate-700">
+                      Payment Simulator
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full">
+                    Mobile View
+                  </span>
+                </div>
+
+                {/* Android Device Chassis - Compact Width */}
+                <div className="w-full max-w-[340px] bg-[#1A1F2C] p-2 rounded-[42px] shadow-[0_20px_60px_rgba(11,15,25,0.4)] border-[5px] border-[#2A3142] relative">
+                  
+                  {/* Android Top Micro Speaker Slit */}
+                  <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-14 h-1 bg-[#2D3748] rounded-full z-20" />
+
+                  {/* Android Inner AMOLED Screen */}
+                  <div className="w-full bg-[#0B0F19] rounded-[34px] overflow-hidden flex flex-col min-h-[640px]">
+                    <MultiAppSimulator
+                      balance={balance}
+                      onExecutePayment={handleMultiAppPayment}
+                      compact={true}
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              {/* ======================================================== */}
+              {/* VERTICAL SPLIT DIVIDER LINE WITH REALTIME SYNC BADGE */}
+              {/* ======================================================== */}
+              <div className="hidden lg:flex flex-col items-center justify-center self-stretch relative py-4 px-1">
+                <div className="w-[2px] h-full min-h-[600px] bg-gradient-to-b from-orange-400 via-slate-300 to-emerald-400 rounded-full" />
+                <div className="absolute top-1/2 -translate-y-1/2 flex flex-col items-center gap-1.5 bg-white border-2 border-slate-200 shadow-md py-2 px-1.5 rounded-2xl z-10">
+                  <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-ping" />
+                  <div className="text-[9px] font-black text-slate-700 tracking-tighter uppercase [writing-mode:vertical-lr] rotate-180 py-1">
+                    LIVE SYNC
+                  </div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                 </div>
               </div>
 
-              {/* Right Column (7 Cols): Multi-Tab Engine Discovery */}
-              <div className="lg:col-span-7 space-y-5">
+              {/* ======================================================== */}
+              {/* RIGHT BOARD: HAPPY POCKET DESKTOP SCREEN BOARD (EXPANDED WIDTH) */}
+              {/* ======================================================== */}
+              <div className="flex-1 w-full min-w-0 space-y-4">
                 
-                {/* Secondary Tab Switcher */}
+                {/* Board Label */}
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-black tracking-wider uppercase text-slate-700">
+                      Happy Pocket Financial Intelligence
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
+                    Desktop Screen Dashboard
+                  </span>
+                </div>
+
+                {/* Desktop Monitor Style Chassis Card */}
+                <div className="bg-white rounded-[32px] p-6 shadow-[0_15px_50px_rgba(15,23,42,0.08)] border border-slate-200/90 space-y-5">
+                  
+                  {/* Browser / Desktop Window Top Bar */}
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-rose-400 inline-block" />
+                        <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" />
+                        <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block" />
+                      </div>
+                      <div className="ml-3 px-3 py-1 rounded-lg bg-slate-100 text-slate-500 font-mono text-[11px] flex items-center gap-1.5 border border-slate-200/60">
+                        <Lock className="w-3 h-3 text-slate-400" />
+                        <span>app.happypocket.in/dashboard/insights</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsAAModalOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition border border-emerald-200 shadow-xs cursor-pointer"
+                        title="Connect bank accounts via RBI Account Aggregator"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Connect via AA</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsUploadOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                        title="Upload bank statement PDF"
+                      >
+                        <Receipt className="w-3.5 h-3.5" />
+                        <span>Upload Statement</span>
+                      </button>
+
+                      <span className="h-4 w-px bg-slate-200 mx-1" />
+
+                      <div className="flex items-center gap-1.5">
+                        <HappyPocketLogo size={24} />
+                        <span className="font-extrabold text-xs text-slate-900 tracking-tight hidden sm:inline">Happy Pocket Desktop</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Problem Statement Header */}
+                  <div className="bg-gradient-to-br from-[#0A172E] to-slate-900 rounded-[28px] p-5 sm:p-6 text-white shadow-xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-white/10 text-emerald-400">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">
+                            Problem Statement Solution
+                          </span>
+                          <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                            Zero-Distortion Financial Visibility Engine
+                          </h3>
+                        </div>
+                      </div>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2.5 py-1 rounded-full border border-emerald-500/30">
+                        Problem Solved
+                      </span>
+                    </div>
+
+                    {/* 3 Core Anti-Distortion KPI Highlights */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
+                        <span className="text-[10px] text-slate-400 block font-bold uppercase">Raw Statement Outflows</span>
+                        <div className="text-lg font-black font-mono text-white mt-1">
+                          ₹{analysisResult ? analysisResult.kpis.rawOutflows.toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'}
+                        </div>
+                        <span className="text-[10px] text-slate-400">Includes all noise</span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                        <span className="text-[10px] text-rose-300 block font-bold uppercase">Noise Deductions</span>
+                        <div className="text-lg font-black font-mono text-rose-400 mt-1">
+                          -₹{analysisResult ? (analysisResult.kpis.rawOutflows - analysisResult.kpis.trueLivingExpenses).toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'}
+                        </div>
+                        <span className="text-[10px] text-rose-300">Self-transfers & refunds</span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30">
+                        <span className="text-[10px] text-emerald-300 block font-bold uppercase">True Living Expenses</span>
+                        <div className="text-lg font-black font-mono text-emerald-300 mt-1">
+                          ₹{analysisResult ? analysisResult.kpis.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'}
+                        </div>
+                        <span className="text-[10px] text-emerald-400 font-bold">100% distortion-free</span>
+                      </div>
+                    </div>
+                  </div>
+
+                {/* SubTab Switcher for Problem Statement Solution */}
                 <div className="flex items-center gap-1.5 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.03)] overflow-x-auto">
                   {[
-                    { id: 'insights', label: 'Financial Discovery' },
-                    { id: 'expense_tracker', label: 'Expense Tracker' },
-                    { id: 'smart_insights', label: 'Smart Insights' },
+                    { id: 'insights', label: 'True Living Discovery' },
+                    { id: 'raw_transactions', label: `Raw Statements / DB (${extractedRawTxs.length})` },
                     { id: 'ledger', label: `Normalized Ledger (${analysisResult ? analysisResult.enriched.length : transactions.length})` },
-                    { id: 'subscriptions', label: `Recurring Drains (${analysisResult ? analysisResult.subscriptions.length : 2})` },
+                    { id: 'expense_tracker', label: 'Expense Tracker' },
+                    { id: 'smart_insights', label: 'Mandates & Better Swaps' },
+                    { id: 'subscriptions', label: `AutoPay Mandates (${analysisResult ? analysisResult.subscriptions.length : 2})` },
                     { id: 'tax', label: 'Tax Deductions' },
-                    { id: 'sandbox', label: 'What-If Savings Sandbox' },
                   ].map((t) => (
                     <button
                       key={t.id}
@@ -807,209 +1065,21 @@ export default function HappyPocketApp() {
                   ))}
                 </div>
 
-                {/* SubTab: Expense Tracker */}
+                {/* Tab Pane 1: Expense Tracker */}
                 {analyticsSubTab === ('expense_tracker' as any) && (
-                  <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
+                  <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm">
                     <ExpenseTrackerTab transactions={extractedRawTxs} />
                   </div>
                 )}
 
-                {/* SubTab: Smart Insights */}
+                {/* Tab Pane 2: Smart Insights */}
                 {analyticsSubTab === ('smart_insights' as any) && (
-                  <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm">
+                  <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm">
                     <InsightsTab transactions={extractedRawTxs} />
                   </div>
                 )}
 
-                {/* SubTab 1: Financial Discovery & Insights */}
-                {analyticsSubTab === 'insights' && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase">Monthly Commitments</span>
-                        <div className="text-2xl font-bold font-mono text-slate-900">
-                          ₹{analysisResult ? analysisResult.kpis.monthlyRecurringCommitments.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '768.00'}
-                          <span className="text-xs font-normal text-slate-500"> /mo</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500">
-                          ₹{analysisResult ? (analysisResult.kpis.monthlyRecurringCommitments * 12).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '9,216.00'} annual burden across digital mandates.
-                        </p>
-                      </div>
-
-                      <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase">Verified Savings Rate</span>
-                        <div className="text-2xl font-bold font-mono text-emerald-600">
-                          {analysisResult ? ((1 - (analysisResult.kpis.trueLivingExpenses / Math.max(1, analysisResult.enriched.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 75000)))) * 100).toFixed(1) : '57.9'}%
-                        </div>
-                        <p className="text-[11px] text-slate-500">
-                          Discretionary spend remaining after clean living expenses.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-3">
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        Engine Highlights & Automated Reconciliations
-                      </h3>
-                      <div className="space-y-2">
-                        {[
-                          { title: 'Self-Transfer Excluded', desc: 'Transfer of ₹15,000 to Marcus HYSA excluded from expense baseline.', tag: 'Auto-Matched' },
-                          { title: 'Refund Paired', desc: 'Zara Store return refund of ₹4,200 offset original debit with zero net distortion.', tag: 'Offset Paired' },
-                          { title: 'P2P Dinner Split Receipt', desc: 'P2P reimbursement of ₹2,700 credited against Nobu dinner bill.', tag: 'Reimbursed' }
-                        ].map((item, idx) => (
-                          <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between">
-                            <div>
-                              <div className="text-xs font-bold text-slate-900">{item.title}</div>
-                              <div className="text-[11px] text-slate-500">{item.desc}</div>
-                            </div>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
-                              {item.tag}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* SubTab 2: Normalized Ledger */}
-                {analyticsSubTab === 'ledger' && (
-                  <div className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Filter className="w-3.5 h-3.5 text-slate-400" />
-                        <select
-                          value={selectedLedgerFilter}
-                          onChange={e => setSelectedLedgerFilter(e.target.value)}
-                          className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-2.5 py-1.5 text-slate-700 focus:outline-none"
-                        >
-                          <option value="all">All Transactions ({analysisResult ? analysisResult.enriched.length : transactions.length})</option>
-                          <option value="recurring">Recurring Only</option>
-                          <option value="transfer">Self-Transfers Only</option>
-                          <option value="refund">Refunds Only</option>
-                          <option value="split">Shared Splits Only</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold sticky top-0">
-                          <tr>
-                            <th className="py-2.5 px-3">Date</th>
-                            <th className="py-2.5 px-3">Beneficiary / Merchant</th>
-                            <th className="py-2.5 px-3">Mode / RRN</th>
-                            <th className="py-2.5 px-3">Category</th>
-                            <th className="py-2.5 px-3 text-right">Amount</th>
-                            <th className="py-2.5 px-3 text-center">Status</th>
-                            <th className="py-2.5 px-3 text-center">Override</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {analysisResult ? (
-                            filteredLedger.map((tx) => {
-                              const isInflow = tx.amount > 0;
-                              return (
-                                <tr key={tx.id} className="hover:bg-slate-50/80 transition">
-                                  <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap font-mono text-[11px]">
-                                    {new Date(tx.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                                  </td>
-                                  <td className="py-2.5 px-3 max-w-[180px]">
-                                    <div className="font-bold text-slate-900 truncate">
-                                      {tx.payeeName || tx.cleanMerchant}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 font-mono truncate" title={tx.rawDescription}>
-                                      {tx.vpaHandle ? `@${tx.vpaHandle}` : tx.bankCode || 'UPI'}
-                                    </div>
-                                  </td>
-                                  <td className="py-2.5 px-3 whitespace-nowrap">
-                                    <span className="font-bold text-slate-700 block">{tx.txMode || 'UPI'}</span>
-                                    <span className="text-[10px] text-slate-400 font-mono">
-                                      {tx.upiRrn ? `${tx.upiRrn}` : ''}
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3 whitespace-nowrap">
-                                    <span className="font-medium text-slate-700">{tx.category}</span>
-                                  </td>
-                                  <td className={`py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap ${
-                                    isInflow ? 'text-emerald-600' : 'text-slate-900'
-                                  }`}>
-                                    {isInflow ? '+' : '-'}₹{Math.abs(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                  </td>
-                                  <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                                    {tx.isInternalTransfer && (
-                                      <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                        Self-Transfer
-                                      </span>
-                                    )}
-                                    {tx.isRefundOrReversal && (
-                                      <span className="bg-cyan-100 text-cyan-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                        Refund Paired
-                                      </span>
-                                    )}
-                                    {tx.isSharedSplitExpense && (
-                                      <span className="bg-indigo-100 text-indigo-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                        Split Reconciled
-                                      </span>
-                                    )}
-                                    {tx.isRecurring && (
-                                      <span className="bg-rose-100 text-rose-800 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                                        Recurring
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRecategorize(tx.id, tx.category)}
-                                      className="inline-flex items-center gap-1 text-[11px] text-orange-600 hover:text-orange-700 font-bold transition"
-                                      title="Cycle category"
-                                    >
-                                      <Edit3 className="w-3 h-3" />
-                                      Adjust
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            transactions.map((tx) => (
-                              <tr key={tx.id} className="hover:bg-slate-50/80 transition">
-                                <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap font-mono text-[11px]">
-                                  {tx.rawTimeText || 'Today'}
-                                </td>
-                                <td className="py-2.5 px-3 font-bold text-slate-900">
-                                  {tx.title}
-                                </td>
-                                <td className="py-2.5 px-3 font-mono text-slate-500">
-                                  UPI
-                                </td>
-                                <td className="py-2.5 px-3 text-slate-600 capitalize">
-                                  {tx.type}
-                                </td>
-                                <td className={`py-2.5 px-3 text-right font-mono font-bold ${
-                                  tx.amount > 0 ? 'text-emerald-600' : 'text-slate-900'
-                                }`}>
-                                  {tx.amount > 0 ? '+₹' : '-₹'}{Math.abs(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </td>
-                                <td className="py-2.5 px-3 text-center">
-                                  <span className="bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded-full">
-                                    Verified
-                                  </span>
-                                </td>
-                                <td className="py-2.5 px-3 text-center text-slate-400">
-                                  -
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* SubTab 3: Recurring Drains & Subscriptions */}
+                {/* Tab Pane 3: Subscriptions Killer */}
                 {analyticsSubTab === 'subscriptions' && (
                   <SubscriptionsTab
                     subscriptions={analysisResult?.subscriptions || []}
@@ -1017,62 +1087,204 @@ export default function HappyPocketApp() {
                   />
                 )}
 
-                {/* SubTab 4: Tax Finder */}
+                {/* Tab Pane 4: Tax Finder */}
                 {analyticsSubTab === 'tax' && (
                   <TaxFinderTab />
                 )}
 
-                {/* SubTab 5: What-If Savings Sandbox */}
-                {analyticsSubTab === 'sandbox' && (
-                  <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-4">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900">What-If Financial Sandbox</h3>
-                      <p className="text-xs text-slate-500">
-                        Adjust parameters to calculate compound wealth impact over 1 year and 5 years.
-                      </p>
+                {/* Tab Pane 5: Normalized Ledger Table */}
+                {analyticsSubTab === 'ledger' && (
+                  <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                        Real Database Ledger Stream
+                      </h4>
+                      <select
+                        value={selectedLedgerFilter}
+                        onChange={e => setSelectedLedgerFilter(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-2.5 py-1 text-slate-700 focus:outline-none"
+                      >
+                        <option value="all">All ({analysisResult ? analysisResult.enriched.length : transactions.length})</option>
+                        <option value="recurring">Recurring Only</option>
+                        <option value="transfer">Self-Transfers Only</option>
+                        <option value="refund">Refunds Only</option>
+                        <option value="split">Shared Splits Only</option>
+                      </select>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-800">
-                          Trim Discretionary / Food Delivery Spend: {trimDiningPercent}%
-                        </label>
-                        <span className="text-xs font-mono font-bold text-orange-600">
-                          ₹{((4200 * trimDiningPercent) / 100).toFixed(0)} saved/mo
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="50"
-                        step="5"
-                        value={trimDiningPercent}
-                        onChange={e => setTrimDiningPercent(Number(e.target.value))}
-                        className="w-full accent-orange-500 cursor-pointer"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 pt-1">
-                      <div className="p-4 rounded-xl bg-orange-50 border border-orange-200 text-center">
-                        <span className="text-[11px] font-bold text-orange-800 block">1-Year Wealth Impact</span>
-                        <div className="text-xl font-bold font-mono text-orange-600 mt-1">
-                          +₹{(((4200 * trimDiningPercent) / 100) * 12).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </div>
-                        <span className="text-[10px] text-orange-700">Accumulated surplus</span>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
-                        <span className="text-[11px] font-bold text-emerald-800 block">5-Year SIP Impact (12% CAGR)</span>
-                        <div className="text-xl font-bold font-mono text-emerald-600 mt-1">
-                          +₹{((((4200 * trimDiningPercent) / 100) * 12 * 5) * 1.35).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </div>
-                        <span className="text-[10px] text-emerald-700">Compounded investment</span>
-                      </div>
+                    <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold sticky top-0">
+                          <tr>
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3">Merchant</th>
+                            <th className="py-2.5 px-3">Category</th>
+                            <th className="py-2.5 px-3 text-right">Amount</th>
+                            <th className="py-2.5 px-3 text-center">Engine Treatment</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredLedger.map((tx) => (
+                            <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                              <td className="py-2 px-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                                {new Date(tx.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                              </td>
+                              <td className="py-2 px-3 max-w-[140px] truncate font-bold text-slate-900">
+                                {tx.payeeName || tx.cleanMerchant}
+                              </td>
+                              <td className="py-2 px-3 whitespace-nowrap">
+                                <span className="font-medium text-slate-700">{tx.category}</span>
+                              </td>
+                              <td className={`py-2 px-3 text-right font-bold font-mono ${tx.amount > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                                {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount).toLocaleString('en-IN')}
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                {tx.isInternalTransfer ? (
+                                  <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                                    Excluded (Self)
+                                  </span>
+                                ) : tx.isRecurring ? (
+                                  <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                    Recurring Drain
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                                    Clean Living
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
 
+                {/* Tab Pane: Raw Statement Transactions Stream */}
+                {analyticsSubTab === 'raw_transactions' && (
+                  <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                            Raw Statement Stream (Unfiltered / Distortion Present)
+                          </h4>
+                          <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full font-mono">
+                            {extractedRawTxs.length} Raw Records
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          This is the un-sanitized log directly from the bank or live simulator. Notice how self-transfers and refund round-trips distort your perception of total spending.
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Gross Outflow</span>
+                        <span className="text-sm font-black font-mono text-slate-900">
+                          ₹{extractedRawTxs.filter(t => t.amount < 0).reduce((acc, t) => acc + Math.abs(t.amount), 0).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold sticky top-0">
+                          <tr>
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3">Raw Description / Payee</th>
+                            <th className="py-2.5 px-3">Type</th>
+                            <th className="py-2.5 px-3 text-right">Raw Amount</th>
+                            <th className="py-2.5 px-3 text-center">Problem / Distortion Flag</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {extractedRawTxs.map((tx) => {
+                            const isDebit = tx.amount < 0;
+                            const isTransfer = tx.isInternalTransfer || (tx.category === 'Internal Transfer');
+                            const isRefund = tx.category === 'Reimbursement / Split' || !isDebit;
+                            const isRecurring = tx.isRecurring;
+                            return (
+                              <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                                <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                                  {new Date(tx.timestamp || Date.now()).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                                </td>
+                                <td className="py-2.5 px-3 max-w-[200px] truncate">
+                                  <div className="font-bold text-slate-900">{tx.rawDescription || tx.payeeName || tx.cleanMerchant}</div>
+                                  <div className="text-[10px] text-slate-400 font-mono">{tx.upiRrn || tx.id}</div>
+                                </td>
+                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    !isDebit ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {isDebit ? 'DEBIT' : 'CREDIT'}
+                                  </span>
+                                </td>
+                                <td className={`py-2.5 px-3 text-right font-black font-mono ${
+                                  !isDebit ? 'text-emerald-600' : 'text-slate-900'
+                                }`}>
+                                  {!isDebit ? '+' : '-'}₹{Math.abs(tx.amount).toLocaleString('en-IN')}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  {isTransfer ? (
+                                    <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
+                                      ⚠️ Noise: Self-Transfer
+                                    </span>
+                                  ) : isRefund ? (
+                                    <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                                      🔄 Split / Offset
+                                    </span>
+                                  ) : isRecurring ? (
+                                    <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold">
+                                      🔁 Hidden Recurring Drain
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                                      Standard Expense
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab Pane 6: Insights Default */}
+                {analyticsSubTab === 'insights' && (
+                  <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-4 rounded-2xl bg-orange-50/60 border border-orange-100">
+                        <span className="text-[10px] font-bold text-orange-800 uppercase block">Monthly Recurring Drain</span>
+                        <div className="text-xl font-bold font-mono text-orange-700 mt-0.5">
+                          ₹{analysisResult ? analysisResult.kpis.monthlyRecurringCommitments.toLocaleString('en-IN', { minimumFractionDigits: 0 }) : '0'} /mo
+                        </div>
+                        <span className="text-[10px] text-orange-600">Fixed annual burden of ₹{analysisResult ? (analysisResult.kpis.monthlyRecurringCommitments * 12).toLocaleString('en-IN') : '0'}</span>
+                      </div>
+
+                      <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                        <span className="text-[10px] font-bold text-emerald-800 uppercase block">True Living Ratio</span>
+                        <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
+                          {analysisResult && analysisResult.kpis.rawOutflows > 0 ? ((analysisResult.kpis.trueLivingExpenses / analysisResult.kpis.rawOutflows) * 100).toFixed(1) : '100.0'}%
+                        </div>
+                        <span className="text-[10px] text-emerald-600">100% clean living expenses</span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                      <h4 className="text-xs font-bold text-slate-900">Why Happy Pocket Solves Financial Fog:</h4>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Traditional UPI apps (GPay, PhonePe) display transaction logs as raw streams where moving money between your own accounts or returning an e-commerce order appears as massive spending. <strong>Happy Pocket normalizes, dedupes, and isolates true living expenses</strong> with zero manual bookkeeping.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                </div>
               </div>
+
             </div>
           </div>
         )}
