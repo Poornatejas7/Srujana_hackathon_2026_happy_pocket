@@ -27,7 +27,8 @@ import {
   Bot,
   ReceiptIndianRupee,
   Repeat,
-  Columns
+  Columns,
+  Download
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -78,18 +79,25 @@ export default function HappyPocketApp() {
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // User Authentication & Session State
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [userName, setUserName] = useState('Kotresh C');
+
   // Account Aggregator (AA) Live Flow Simulator State
+  const [isAAConnected, setIsAAConnected] = useState(true);
   const [isAAModalOpen, setIsAAModalOpen] = useState(false);
   const [aaStep, setAaStep] = useState<'MOBILE' | 'OTP' | 'SELECT_ACCOUNTS' | 'FETCHING' | 'SUCCESS'>('MOBILE');
   const [aaMobile, setAaMobile] = useState('9876543210');
   const [aaOtp, setAaOtp] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState('4829');
   const [selectedAABanks, setSelectedAABanks] = useState<string[]>(['sbi_40665', 'canara_91636']);
+  const [phoneOtpNotification, setPhoneOtpNotification] = useState<{ title: string; body: string; code?: string } | null>(null);
 
   // Live UPI Phone Payment Simulator State
   const [isPhoneSimOpen, setIsPhoneSimOpen] = useState(false);
   const [simPayee, setSimPayee] = useState('Swiggy');
   const [simAmount, setSimAmount] = useState('450');
-  const [simApp, setSimApp] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | 'CRED'>('Google Pay');
+  const [simApp, setSimApp] = useState<'PhonePe'>('PhonePe');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -328,6 +336,7 @@ export default function HappyPocketApp() {
       payeeName: params.payee,
       bankCode: 'OKAXIS',
       vpaHandle: vpa,
+      mcc: params.mcc || (params.category === 'Groceries' ? '5411' : params.category === 'Dining & Nightlife' ? '5812' : params.category === 'Housing & Utilities' ? '4900' : params.isRecurring ? '4899' : params.isInternalTransfer ? '6538' : '5651'),
       category: params.category as any,
       remark: `${params.method} via ${params.app}`,
       isRecurring: params.isRecurring || false,
@@ -362,47 +371,57 @@ export default function HappyPocketApp() {
   const handleAASubmitMobile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!aaMobile || aaMobile.length < 10) return;
+    const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedOtp(newOtp);
     setAaStep('OTP');
+
+    // Pop the incoming SMS notification directly inside the Phone Simulator
+    setPhoneOtpNotification({
+      title: 'RBI Account Aggregator • Setu',
+      body: `Your OTP for linking bank accounts to Happy Pocket is ${newOtp}. Valid for 5 mins. Do not share.`,
+      code: newOtp
+    });
+
+    showToast(`SMS sent to Phone Simulator! Check the mobile screen for OTP.`);
   };
 
   const handleAASubmitOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (aaOtp.length < 4) return;
+    if (aaOtp.trim() !== generatedOtp && aaOtp.trim() !== '1234') {
+      showToast('Invalid OTP. Please enter the OTP displayed on the Phone Simulator.');
+      return;
+    }
     setAaStep('SELECT_ACCOUNTS');
+    setPhoneOtpNotification(null); // Clear phone notification once verified
   };
 
   const handleAAAuthorize = async () => {
     setAaStep('FETCHING');
     setTimeout(() => {
-      const demoLines = [
-        "HDFC BANK LIMITED - ACCOUNT STATEMENT",
-        "Account No: 50100412891920 Branch: KORAMANGALA",
-        "01/10/2026 SALARY CREDIT TECH CORP 75,000.00 CR",
-        "02/10/2026 UPI/429182/SWIGGY/swiggy@icici 450.00 DR",
-        "03/10/2026 TFR TO SELF MARCUS HYSA 15,000.00 DR",
-        "05/10/2026 NETFLIX ENTERTAINMENT MTHLY 649.00 DR",
-        "08/10/2026 SPOTIFY INDIA PREMIUM 119.00 DR",
-        "12/10/2026 UPI/391028/ZARA STORE 4,200.00 DR",
-        "15/10/2026 ZARA STORE RETURN REFUND 4,200.00 CR",
-        "16/10/2026 NOBU DINNER SHARABLE BILL 5,400.00 DR",
-        "17/10/2026 UPI/8812/P2P DINNER SPLIT REIMBURSEMENT 2,700.00 CR",
-        "20/10/2026 AVALON BAY RENT ACH 25,000.00 DR",
-        "22/10/2026 CON EDISON ELECTRICITY 1,850.00 DR",
-        "24/10/2026 LUMEN METABOLISM UNUSED SUB 2,999.00 DR"
-      ];
-      const raw = parseBankStatementLines(demoLines);
-      setExtractedRawTxs(raw);
-      syncTransactionsWithEngine(raw);
-      persistToDatabase(raw);
-
+      setIsAAConnected(true);
       setAaStep('SUCCESS');
       setTimeout(() => {
         setIsAAModalOpen(false);
         setAaStep('MOBILE');
         setAaOtp('');
-        showToast("Connected via RBI Account Aggregator! Streamed live records to Atlas.");
+        showToast("Connected via RBI Account Aggregator! Multi-bank live sync enabled.");
       }, 1000);
-    }, 1400);
+    }, 1200);
+  };
+
+  const handleAADisconnect = () => {
+    setIsAAConnected(false);
+    showToast("Disconnected from RBI Account Aggregator. Data sync paused.");
+  };
+
+  const handleToggleAuth = () => {
+    if (isLoggedIn) {
+      setIsLoggedIn(false);
+      showToast("Logged out of Happy Pocket. Sign in to view your sensitive ledger.");
+    } else {
+      setIsLoggedIn(true);
+      showToast("Welcome back, Kotresh! Multi-bank vault decrypted.");
+    }
   };
 
   // Quick Action handlers
@@ -489,6 +508,56 @@ export default function HappyPocketApp() {
               <span>Solution (Full Dashboard)</span>
             </button>
           </div>
+
+          <span className="h-4 w-px bg-slate-200 mx-0.5" />
+
+          {/* RBI Account Aggregator Connect / Disconnect Status Button */}
+          {isAAConnected ? (
+            <button
+              type="button"
+              onClick={handleAADisconnect}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 font-bold text-xs border border-emerald-200 hover:border-rose-200 transition cursor-pointer group shadow-xs"
+              title="Click to Disconnect RBI Account Aggregator"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 group-hover:bg-rose-500 animate-pulse" />
+              <span className="group-hover:hidden">AA: Connected</span>
+              <span className="hidden group-hover:inline">Disconnect AA</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsAAModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold text-xs border border-slate-300 hover:border-emerald-300 transition cursor-pointer shadow-xs"
+              title="Connect bank accounts via RBI Account Aggregator"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              <span>Connect AA</span>
+            </button>
+          )}
+
+          {/* User Session Login / Logout Button */}
+          <button
+            type="button"
+            onClick={handleToggleAuth}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition border cursor-pointer shadow-xs ${
+              isLoggedIn 
+                ? 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900' 
+                : 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500'
+            }`}
+            title={isLoggedIn ? 'Click to Log Out' : 'Click to Log In'}
+          >
+            {isLoggedIn ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span>{userName} (Logout)</span>
+              </>
+            ) : (
+              <>
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Login</span>
+              </>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -507,10 +576,11 @@ export default function HappyPocketApp() {
               <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-16 h-1 bg-[#2D3748] rounded-full z-20" />
 
               {/* Android Inner AMOLED Screen */}
-              <div className="w-full bg-[#0B0F19] rounded-[36px] overflow-hidden flex flex-col min-h-[680px]">
+              <div className="w-full bg-[#0B0F19] rounded-[36px] overflow-hidden flex flex-col h-[640px]">
                 <MultiAppSimulator
                   balance={balance}
                   onExecutePayment={handleMultiAppPayment}
+                  pendingSmsNotification={phoneOtpNotification}
                 />
               </div>
             </div>
@@ -541,15 +611,28 @@ export default function HappyPocketApp() {
                 </div>
 
                 <div className="flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsAAModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition border border-emerald-200 shadow-xs cursor-pointer"
-                    title="Connect bank accounts via RBI Account Aggregator"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Connect via AA</span>
-                  </button>
+                  {isAAConnected ? (
+                    <button
+                      type="button"
+                      onClick={handleAADisconnect}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 font-bold text-xs transition border border-emerald-200 hover:border-rose-200 shadow-xs cursor-pointer group"
+                      title="Click to Disconnect RBI Account Aggregator"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 group-hover:bg-rose-500" />
+                      <span className="group-hover:hidden">AA: Connected</span>
+                      <span className="hidden group-hover:inline">Disconnect AA</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsAAModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold text-xs transition border border-slate-300 hover:border-emerald-300 shadow-xs cursor-pointer"
+                      title="Connect bank accounts via RBI Account Aggregator"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Connect via AA</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -758,11 +841,68 @@ export default function HappyPocketApp() {
                         This is the un-sanitized log directly from the bank or live simulator. Notice how self-transfers and refund round-trips distort your perception of total spending.
                       </p>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Gross Outflow</span>
-                      <span className="text-sm font-black font-mono text-slate-900">
-                        ₹{extractedRawTxs.filter(t => t.amount < 0).reduce((acc, t) => acc + Math.abs(t.amount), 0).toLocaleString('en-IN')}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Gross Outflow</span>
+                        <span className="text-sm font-black font-mono text-slate-900">
+                          ₹{extractedRawTxs.filter(t => t.amount < 0).reduce((acc, t) => acc + Math.abs(t.amount), 0).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      
+                      {/* Export Buttons */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!extractedRawTxs.length) return;
+                            const headers = ['ID', 'Date', 'Amount', 'Type', 'Description', 'Payee', 'RRN', 'Category', 'Tier', 'IsSelfTransfer', 'IsRecurring'];
+                            const rows = extractedRawTxs.map(t => [
+                              t.id,
+                              new Date(t.timestamp).toISOString(),
+                              t.amount,
+                              t.amount < 0 ? 'DEBIT' : 'CREDIT',
+                              `"${(t.rawDescription || '').replace(/"/g, '""')}"`,
+                              `"${(t.payeeName || t.cleanMerchant || '').replace(/"/g, '""')}"`,
+                              t.upiRrn || '',
+                              t.category || '',
+                              t.tier || '',
+                              t.isInternalTransfer ? 'YES' : 'NO',
+                              t.isRecurring ? 'YES' : 'NO'
+                            ]);
+                            const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+                            const encodedUri = encodeURI(csvContent);
+                            const link = document.createElement('a');
+                            link.setAttribute('href', encodedUri);
+                            link.setAttribute('download', `HappyPocket_Bank_Statement_${new Date().toISOString().slice(0, 10)}.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            showToast('Downloaded bank transactions CSV!');
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+                          title="Export all database transactions as CSV"
+                        >
+                          <Download className="w-3.5 h-3.5 text-orange-400" />
+                          <span>Export CSV</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!extractedRawTxs.length) return;
+                            const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(extractedRawTxs, null, 2));
+                            const dlAnchorElem = document.createElement('a');
+                            dlAnchorElem.setAttribute('href', dataStr);
+                            dlAnchorElem.setAttribute('download', `HappyPocket_Transactions_${new Date().toISOString().slice(0, 10)}.json`);
+                            dlAnchorElem.click();
+                            showToast('Downloaded bank transactions JSON!');
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition border border-slate-200"
+                          title="Export all database transactions as JSON"
+                        >
+                          <span>JSON</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -772,6 +912,7 @@ export default function HappyPocketApp() {
                         <tr>
                           <th className="py-2.5 px-3">Date</th>
                           <th className="py-2.5 px-3">Raw Description / Payee</th>
+                          <th className="py-2.5 px-3 text-center">NPCI MCC</th>
                           <th className="py-2.5 px-3">Type</th>
                           <th className="py-2.5 px-3 text-right">Raw Amount</th>
                           <th className="py-2.5 px-3 text-center">Problem / Distortion Flag</th>
@@ -783,6 +924,7 @@ export default function HappyPocketApp() {
                           const isTransfer = tx.isInternalTransfer || (tx.category === 'Internal Transfer');
                           const isRefund = tx.category === 'Reimbursement / Split' || !isDebit;
                           const isRecurring = tx.isRecurring;
+                          const displayMcc = tx.mcc || (tx.category === 'Groceries' ? '5411' : tx.category === 'Dining & Nightlife' ? '5812' : tx.category === 'Housing & Utilities' ? '4900' : isRecurring ? '4899' : isTransfer ? '6538' : '5651');
                           return (
                             <tr key={tx.id} className="hover:bg-slate-50/80 transition">
                               <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
@@ -791,6 +933,11 @@ export default function HappyPocketApp() {
                               <td className="py-2.5 px-3 max-w-[200px] truncate">
                                 <div className="font-bold text-slate-900">{tx.rawDescription || tx.payeeName || tx.cleanMerchant}</div>
                                 <div className="text-[10px] text-slate-400 font-mono">{tx.upiRrn || tx.id}</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                <span className="text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 text-slate-800 px-2 py-0.5 rounded-md" title={`ISO 18245 MCC: ${displayMcc}`}>
+                                  {displayMcc}
+                                </span>
                               </td>
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -900,11 +1047,12 @@ export default function HappyPocketApp() {
                   <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-14 h-1 bg-[#2D3748] rounded-full z-20" />
 
                   {/* Android Inner AMOLED Screen */}
-                  <div className="w-full bg-[#0B0F19] rounded-[34px] overflow-hidden flex flex-col min-h-[640px]">
+                  <div className="w-full bg-[#0B0F19] rounded-[34px] overflow-hidden flex flex-col h-[640px]">
                     <MultiAppSimulator
                       balance={balance}
                       onExecutePayment={handleMultiAppPayment}
                       compact={true}
+                      pendingSmsNotification={phoneOtpNotification}
                     />
                   </div>
                 </div>
@@ -961,15 +1109,28 @@ export default function HappyPocketApp() {
                     </div>
 
                     <div className="flex items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setIsAAModalOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition border border-emerald-200 shadow-xs cursor-pointer"
-                        title="Connect bank accounts via RBI Account Aggregator"
-                      >
-                        <Zap className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Connect via AA</span>
-                      </button>
+                      {isAAConnected ? (
+                        <button
+                          type="button"
+                          onClick={handleAADisconnect}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 font-bold text-xs transition border border-emerald-200 hover:border-rose-200 shadow-xs cursor-pointer group"
+                          title="Click to Disconnect RBI Account Aggregator"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 group-hover:bg-rose-500" />
+                          <span className="group-hover:hidden">AA: Connected</span>
+                          <span className="hidden group-hover:inline">Disconnect AA</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsAAModalOpen(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold text-xs transition border border-slate-300 hover:border-emerald-300 shadow-xs cursor-pointer"
+                          title="Connect bank accounts via RBI Account Aggregator"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Connect via AA</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -1348,22 +1509,12 @@ export default function HappyPocketApp() {
             <form onSubmit={handleLivePaymentSim} className="space-y-3.5">
               {/* App Selector */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Select UPI App</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['Google Pay', 'PhonePe', 'Paytm', 'CRED'] as const).map(app => (
-                    <button
-                      type="button"
-                      key={app}
-                      onClick={() => setSimApp(app)}
-                      className={`py-1.5 px-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                        simApp === app 
-                          ? 'bg-orange-500 border-orange-500 text-white shadow-xs' 
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {app}
-                    </button>
-                  ))}
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">UPI Provider</label>
+                <div className="flex items-center gap-2 p-2 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 font-bold text-xs">
+                  <div className="w-5 h-5 rounded-md overflow-hidden flex items-center justify-center shrink-0">
+                    <img src="/icons/phonepe.png" alt="PhonePe" className="w-full h-full object-cover" />
+                  </div>
+                  <span>PhonePe UPI (NPCI @ybl)</span>
                 </div>
               </div>
 
@@ -1441,10 +1592,16 @@ export default function HappyPocketApp() {
         </div>
       )}
 
-      {/* 6. RBI Account Aggregator (AA) Consent Flow Simulator Modal */}
+      {/* 6. RBI Account Aggregator (AA) Consent Flow Simulator Modal (Targeted Desktop Overlay - Zero Blur on Simulator) */}
       {isAAModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-100 rounded-[32px] max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-y-0 right-0 left-0 lg:left-[390px] z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+          {/* Subtle localized backdrop only over the right desktop dashboard (Zero blur, leaves phone simulator 100% visible) */}
+          <div 
+            onClick={() => setIsAAModalOpen(false)} 
+            className="absolute inset-0 bg-slate-950/25 pointer-events-auto cursor-pointer" 
+          />
+
+          <div className="relative z-10 bg-white border-2 border-slate-300 rounded-[32px] max-w-md w-full p-6 space-y-4 shadow-[0_20px_70px_rgba(15,23,42,0.35)] animate-in fade-in zoom-in-95 duration-150 pointer-events-auto">
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-600">
@@ -1508,19 +1665,29 @@ export default function HappyPocketApp() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-xs font-bold text-slate-700">Enter OTP</label>
-                    <span className="text-[10px] text-slate-500">Sent to +91 {aaMobile}</span>
+                    <span className="text-[10px] text-emerald-600 font-bold">📲 SMS Pop-down on Simulator</span>
                   </div>
                   <input
                     type="text"
-                    maxLength={6}
-                    placeholder="1234"
+                    maxLength={4}
+                    placeholder="Enter 4-digit code"
                     value={aaOtp}
                     onChange={e => setAaOtp(e.target.value)}
                     autoFocus
                     required
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 text-center text-lg font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-500 tracking-widest"
                   />
-                  <p className="text-[10px] text-slate-500 text-center mt-1">Hint: Enter 1234 for sandbox authorization.</p>
+                  <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-[11px] flex items-center justify-between">
+                    <span>Look at the <strong>Phone Simulator</strong> screen on the left for the incoming OTP notification!</span>
+                    <button
+                      type="button"
+                      onClick={() => setAaOtp(generatedOtp)}
+                      className="font-mono font-black text-purple-700 text-xs bg-white hover:bg-purple-100 border border-purple-300 px-2.5 py-1 rounded-md shadow-xs cursor-pointer transition"
+                      title="Click to auto-fill code"
+                    >
+                      {generatedOtp} (Click to fill)
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex gap-2">

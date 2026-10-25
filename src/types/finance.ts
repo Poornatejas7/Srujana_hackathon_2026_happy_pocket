@@ -38,6 +38,7 @@ export interface RawTransaction {
   remark?: string;           // Transaction user note e.g. "Sent", "UPI", "Execu", "Paym"
   terminalRef?: string;      // Core banking terminal reference e.g. "0097695162091 AT 40184"
   branchLocation?: string;   // Branch / City e.g. "DONIMALAI TOWNSHIP"
+  mcc?: string;              // ISO 18245 / NPCI Merchant Category Code e.g. "5411", "5651"
   category?: string;
   cleanMerchant?: string;
   isRecurring?: boolean;

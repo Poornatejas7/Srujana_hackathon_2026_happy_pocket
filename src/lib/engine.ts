@@ -9,15 +9,41 @@ import { RawTransaction, EnrichedTransaction, Category, SubscriptionItem } from 
  * - "DEP TFR UPI/CR/656771804358/KOTRESH C/CNRB/mykotresh-/UPI" -> "Self Transfer (Kotresh C - Canara Bank)"
  * - "DEP TFR UPI/CR/625534769719/MEESHO T/YESB/mtpl1@yesb/CT22" -> "Meesho Refund"
  */
-export function extractUPIEntity(raw: string): {
+export function extractUPIEntity(raw: string, explicitMcc?: string): {
   cleanName: string;
   category: Category;
   tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income';
   isSelfTransfer: boolean;
   isRecurring: boolean;
   isRefund: boolean;
+  mcc?: string;
 } {
   const upper = raw.toUpperCase();
+
+  // Primary Check: If explicit ISO/NPCI MCC is present, it takes highest precedence
+  if (explicitMcc) {
+    if (explicitMcc === '5411' || explicitMcc === '5422' || explicitMcc === '5499') {
+      return { cleanName: 'Groceries & Essentials', category: 'Groceries', tier: 'Essential', isSelfTransfer: false, isRecurring: false, isRefund: false, mcc: explicitMcc };
+    }
+    if (explicitMcc === '5812' || explicitMcc === '5814') {
+      return { cleanName: 'Restaurant & Dining', category: 'Dining & Nightlife', tier: 'Discretionary', isSelfTransfer: false, isRecurring: false, isRefund: false, mcc: explicitMcc };
+    }
+    if (explicitMcc === '5651' || explicitMcc === '5691' || explicitMcc === '5621') {
+      return { cleanName: 'Textiles & Apparel Store', category: 'Shopping & Discretionary', tier: 'Discretionary', isSelfTransfer: false, isRecurring: false, isRefund: false, mcc: explicitMcc };
+    }
+    if (explicitMcc === '5541' || explicitMcc === '5542') {
+      return { cleanName: 'Automotive Fuel Station', category: 'Transport & Fuel', tier: 'Essential', isSelfTransfer: false, isRecurring: false, isRefund: false, mcc: explicitMcc };
+    }
+    if (explicitMcc === '4899') {
+      return { cleanName: 'Cable, Satellite & Streaming (OTT)', category: 'Subscriptions & Digital', tier: 'Discretionary', isSelfTransfer: false, isRecurring: true, isRefund: false, mcc: explicitMcc };
+    }
+    if (explicitMcc === '5912' || explicitMcc === '8062' || explicitMcc === '8011') {
+      return { cleanName: 'Medical & Healthcare', category: 'Healthcare', tier: 'Essential', isSelfTransfer: false, isRecurring: false, isRefund: false, mcc: explicitMcc };
+    }
+    if (explicitMcc === '6538' || explicitMcc === '0000') {
+      return { cleanName: 'P2P Peer Transfer', category: 'Reimbursement / Split', tier: 'Transfer_or_Offset', isSelfTransfer: false, isRecurring: false, isRefund: false, mcc: explicitMcc };
+    }
+  }
 
   // 1. Self-Transfer Detection (User's own name in UPI VPA or Canara / Other Bank accounts)
   if (upper.includes('KOTRESH C') || upper.includes('MYKOTRESH') || upper.includes('SELF') || upper.includes('OWN A/C')) {
@@ -196,10 +222,10 @@ export function enrichAndAnalyzeTransactions(
 } {
   // Step 1: Process each transaction with UPI engine
   const enriched: EnrichedTransaction[] = rawTxs.map(tx => {
-    const upiInfo = extractUPIEntity(tx.rawDescription);
+    const upiInfo = extractUPIEntity(tx.rawDescription, tx.mcc);
     let category = upiInfo.category;
     let tier = upiInfo.tier;
-    let confidenceScore = 0.92;
+    let confidenceScore = tx.mcc ? 0.99 : 0.92;
 
     if (tx.amount > 0 && tier !== 'Income' && !upiInfo.isSelfTransfer) {
       tier = 'Transfer_or_Offset';

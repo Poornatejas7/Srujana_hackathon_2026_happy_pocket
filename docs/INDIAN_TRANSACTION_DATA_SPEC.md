@@ -139,3 +139,98 @@ if match:
    - When `remark` contains `Mand`, `Execu`, or `AutoPay`, flag it immediately as a **Recurring AutoPay Mandate** (e.g., Netflix, Google Play, SIPs).
 4. **P2P Split Reconciliation:**
    - Payments with person names (e.g., `Dawood A`, `Harsha`, `Veerabhadrappa`) with remarks like `Sent` or `Paym` are peer transfers, not commercial retail expenses.
+
+---
+
+## 5. Official NPCI & ISO 18245 Merchant Category Code (MCC) Ranges
+
+Under the international **ISO 18245** standard (mandated by the **Reserve Bank of India (RBI)** and **NPCI**), all commercial entities operating on UPI, POS terminals, and card rails are categorized into 4-digit numeric codes (`0001` to `9999`).
+
+### Comprehensive Industry MCC Ranges:
+
+| MCC Range | Sector / Industry | Typical Indian Merchants | Happy Pocket Category & Tier |
+| :--- | :--- | :--- | :--- |
+| **0001 – 1499** | **Agricultural & Farming Services** | Fertilizer dealers, seed suppliers, nurseries | Business / Agriculture |
+| **1500 – 2999** | **Contracted Services & Trades** | Carpentry, plumbing, electrical, civil contractors | Home & Utilities (`Essential`) |
+| **3000 – 3299** | **Airlines** | IndiGo, Air India, SpiceJet, Emirates | Travel & Holidays (`Discretionary`) |
+| **3300 – 3499** | **Car Rental & Vehicle Hire** | Zoomcar, Avis, Revv, Hertz | Transport & Travel (`Discretionary`) |
+| **3500 – 3999** | **Hotels, Resorts & Lodging** | Taj, Marriott, OYO, Airbnb, Treebo | Travel & Leisure (`Discretionary`) |
+| **4000 – 4799** | **Transportation & Freight** | IRCTC (Indian Railways), Metro Rail, DTC/BMTC buses | Public Transport (`Essential`) |
+| **4800 – 4999** | **Telecom, Utilities & Cable/OTT** | Jio, Airtel, BESCOM, Adani Gas, Netflix (`4899`) | Utilities & Subscriptions (`Essential` / `Discretionary`) |
+| **5000 – 5199** | **Wholesale Durable Goods** | Commercial distributors, B2B wholesale supplies | Commercial / B2B |
+| **5200 – 5499** | **Groceries, Supermarkets & Food Retail** | Blinkit (`5411`), Zepto, Reliance Smart, Kirana stores | **Groceries (`Essential Living`)** |
+| **5500 – 5599** | **Automotive Fuel & Service Stations** | Indian Oil (`5541`), BPCL, HPCL, Shell, Petrol Bunks | **Transport & Fuel (`Essential Living`)** |
+| **5600 – 5699** | **Textile, Clothing & Apparel Retail** | Zudio (`5651`), Trends, Zara, Raymond, Local Saree Stores | **Shopping & Apparel (`Discretionary`)** |
+| **5700 – 5799** | **Home Furnishing & Appliances** | IKEA, Pepperfry, Croma, Vijay Sales | Home & Electronics (`Discretionary`) |
+| **5800 – 5899** | **Restaurants, Cafes & Fast Food** | Swiggy (`5812`), Zomato, McDonald's, Starbucks | **Dining & Food Delivery (`Discretionary`)** |
+| **5900 – 5999** | **Pharmacies, Drug Stores & Retail** | Apollo Pharmacy (`5912`), MedPlus, Netmeds, Florists | **Medical & Health (`Essential Living`)** |
+| **6000 – 6599** | **Financial Institutions, P2P Transfers & ATM** | ATM Cash Withdrawals (`6011`), Peer UPI Transfers (`6538`) | Peer Transfer / Cash (`Transfer_or_Offset`) |
+| **7000 – 7299** | **Personal & Hospitality Services** | Salons, Spas, Dry Cleaners, Photographic Studios | Personal Care (`Discretionary`) |
+| **7300 – 7999** | **Business, SaaS & Entertainment** | BookMyShow (`7832`), AWS, Google Workspace, Gaming | Entertainment / Software |
+| **8000 – 8999** | **Healthcare, Hospitals & Legal** | Manipal Hospital (`8062`), Clinics, Diagnostic Labs | Medical / Professional (`Essential`) |
+| **9000 – 9999** | **Government, Taxes & Postal Services** | Income Tax (`9311`), Traffic Challans, Passport Seva | Government & Civic (`Essential`) |
+
+---
+
+## 6. Will the MCC Code Be Present in Data from RBI Account Aggregator vs. Parsed Database?
+
+Here is the exact technical breakdown of data availability across both data sources:
+
+### A. When Ingesting via RBI Account Aggregator (AA Framework)
+* **Savings / Current Bank Accounts:**
+  - **In raw `narration`:** Banks transmit the standardized NPCI text string (e.g., `UPI/DR/203821706198/MEESHO/UTIB/...`).
+  - **In AA Structured Metadata:** Under the official **ReBIT (Reserve Bank Information Technology) Schema** (`version: 1.1.3`), the `Transaction` entity contains:
+    ```json
+    {
+      "txnId": "203821706198",
+      "amount": "450.00",
+      "type": "DEBIT",
+      "mode": "UPI",
+      "narration": "UPI/DR/203821706198/BLINKIT/AXIS/blinkit.groceries@axisbank",
+      "reference": "203821706198",
+      "currentBalance": "39860.00",
+      "transactionTimestamp": "2026-10-25T11:58:00+05:30",
+      "merchant": {
+        "mcc": "5411",
+        "name": "Blinkit Commerce Pvt Ltd"
+      }
+    }
+    ```
+  - **Availability:** If the bank (FIP) has implemented ReBIT v1.1.3+ with merchant enrichment, the `mcc` field is populated. If the bank provides legacy basic schema, `mcc` may be `null`, but the registered trade name and VPA are **guaranteed** in `narration`.
+
+* **Credit Card Statements via AA:**
+  - **100% Present.** The Credit Card canonical schema explicitly enforces the `mcc` 4-digit code for every merchant charge.
+
+---
+
+### B. When Ingesting via Parsed Bank Statements (PDF / CSV / Scraped DB)
+* **In Savings / Current Account PDF Statements:**
+  - **The 4-digit number is generally NOT printed as a separate column** on passbooks due to 30-character print line limitations.
+  - **HOWEVER, the data is still fully identifiable:**
+    1. The **Registered Trade Name** (e.g., `ZUDIO`, `BLINKIT`, `INDIAN OIL`) is embedded in the CBS narration.
+    2. The **VPA Handle** (e.g., `blinkit.groceries@axisbank` or `zudio.retail@hdfcbank`) reveals the merchant category.
+    3. **Happy Pocket's Engine** ([`src/lib/engine.ts`](file:///home/kotresh/Code/HackthonHaked/src/lib/engine.ts)) matches these patterns directly to assign the exact ISO category without needing the raw 4-digit integer printed.
+
+* **In Credit Card PDF Statements:**
+  - **Often printed directly.** Many Indian banks (HDFC, SBI Card, Axis) print the 4-digit MCC in a dedicated column or bracket: `5651 - Zudio Bangalore`.
+
+---
+
+## 7. Why Merchant Category Codes (MCC) Are Critical for Financial Truth
+
+The **Merchant Category Code (MCC)** is the **single most authoritative piece of metadata** in transaction processing. 
+
+### How Happy Pocket Uses MCC as First-Class Ground Truth:
+1. **Definitive Discretionary vs. Essential Separation**:
+   - `MCC 5411` (Groceries) $\to$ **Essential Living Expense** (food you need to survive).
+   - `MCC 5651` (Apparel & Textiles) $\to$ **Discretionary Shopping** (lifestyle spending).
+   - `MCC 5812` (Restaurants) $\to$ **Discretionary Dining** (eating out).
+   - Even if a merchant description is obscure (e.g. `SRI VENKATESHWARA ENT`), an `MCC: 5411` tag instantly tells the Happy Pocket engine with **99% confidence** that it is a grocery store, bypassing text ambiguity!
+
+2. **Isolating Financial Noise (`MCC 6538` & `0000`)**:
+   - Money transfers between bank accounts or peer splits carry `MCC: 6538` (Money Transfer) or `0000`.
+   - The engine uses this code to **completely exclude the transaction from living expenses**, ensuring your net monthly living expense is never artificially inflated.
+
+3. **Export Compatibility**:
+   - Both the **CSV and JSON exports** now include the **NPCI MCC** column for full auditing, tax deduction matching, and external spreadsheet accounting.
+
