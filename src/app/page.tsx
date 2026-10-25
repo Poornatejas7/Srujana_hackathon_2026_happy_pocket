@@ -84,6 +84,7 @@ export default function HappyPocketApp() {
             txMode: t.txMode || 'UPI',
             upiRrn: t.upiRrn,
             payeeName: t.payeeName,
+            accountType: t.accountType || (t.isInternalTransfer ? 'Personal' : 'Merchant / Business'),
             isInternalTransfer: t.isInternalTransfer || false,
             isReimbursementOffset: t.isReimbursementOffset || false,
             isRecurringAutoPay: t.isRecurringAutoPay || false,
@@ -103,6 +104,8 @@ export default function HappyPocketApp() {
             timestamp: item.timestamp,
             amount: item.amount,
             type: item.amount > 0 ? 'salary' : (item.category === 'Groceries' ? 'grocery' : item.category === 'Transport & Fuel' ? 'fuel' : item.isInternalTransfer ? 'transfer' : 'other'),
+            accountType: item.accountType,
+            category: item.category,
           }));
 
           if (converted.length > 0) {
@@ -174,7 +177,7 @@ export default function HappyPocketApp() {
       const analyzed = enrichAndAnalyzeTransactions([...raw, ...extractedRawTxs]);
       setAnalysisResult(analyzed);
     }
-    showToast(`Imported ${imported.length} statement records!`);
+    showToast(`Categorized & saved ${imported.length} statement records to MongoDB Atlas!`);
   };
 
   // Quick Action handlers

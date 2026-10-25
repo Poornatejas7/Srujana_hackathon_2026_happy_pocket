@@ -38,10 +38,12 @@ export interface RawTransaction {
   remark?: string;           // Transaction user note e.g. "Sent", "UPI", "Execu", "Paym"
   terminalRef?: string;      // Core banking terminal reference e.g. "0097695162091 AT 40184"
   branchLocation?: string;   // Branch / City e.g. "DONIMALAI TOWNSHIP"
+  accountType?: 'Merchant / Business' | 'Personal';
 }
 
 export interface EnrichedTransaction extends RawTransaction {
   cleanMerchant: string;
+  accountType: 'Merchant / Business' | 'Personal';
   category: Category;
   tier: 'Essential' | 'Discretionary' | 'Transfer_or_Offset' | 'Income';
   isRecurring: boolean;

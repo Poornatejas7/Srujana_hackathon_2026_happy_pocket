@@ -13,6 +13,8 @@ export interface ITransactionDocument extends Document {
   vpaHandle?: string;
   remark?: string;
   cleanMerchant?: string;
+  accountType: 'Merchant / Business' | 'Personal';
+  direction?: 'DEBIT' | 'CREDIT';
   category?: string;
   tier?: string;
   isRecurring?: boolean;
@@ -21,6 +23,7 @@ export interface ITransactionDocument extends Document {
   netOutflowAmount?: number;
   userOverridden?: boolean;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const TransactionSchema: Schema = new Schema(
@@ -36,9 +39,20 @@ const TransactionSchema: Schema = new Schema(
     bankCode: { type: String },
     vpaHandle: { type: String },
     remark: { type: String },
-    cleanMerchant: { type: String },
-    category: { type: String, default: 'Shopping & Discretionary' },
-    tier: { type: String, default: 'Discretionary' },
+    cleanMerchant: { type: String, index: true },
+    accountType: { 
+      type: String, 
+      enum: ['Merchant / Business', 'Personal'], 
+      default: 'Personal', 
+      index: true 
+    },
+    direction: { 
+      type: String, 
+      enum: ['DEBIT', 'CREDIT'], 
+      default: 'DEBIT' 
+    },
+    category: { type: String, default: 'Shopping & Discretionary', index: true },
+    tier: { type: String, default: 'Discretionary', index: true },
     isRecurring: { type: Boolean, default: false },
     isInternalTransfer: { type: Boolean, default: false },
     isRefundOrReversal: { type: Boolean, default: false },
@@ -50,7 +64,9 @@ const TransactionSchema: Schema = new Schema(
   }
 );
 
-// Prevent duplicate indexing collisions by enforcing unique compound index on RRN + timestamp + amount where RRN exists
+// Helpful compound indexes for MongoDB Compass queries and aggregations
+TransactionSchema.index({ accountType: 1, category: 1 });
+TransactionSchema.index({ accountType: 1, timestamp: -1 });
 TransactionSchema.index({ upiRrn: 1, timestamp: 1, amount: 1 }, { unique: false });
 
 export const TransactionModel =

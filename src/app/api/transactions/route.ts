@@ -1,50 +1,118 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { TransactionModel } from '@/models/Transaction';
+import { extractUPIEntity } from '@/lib/engine';
 import mongoose from 'mongoose';
 
-// 1. GET: Fetch transactions from MongoDB
+// Helper to sanitize, clean and categorize a transaction
+function cleanAndCategorizeTx(t: any) {
+  const doc: any = { ...t };
+  if (doc.id && !doc._id && mongoose.isValidObjectId(doc.id)) {
+    doc._id = doc.id;
+  } else {
+    delete doc.id;
+  }
+
+  // Run through classification engine
+  const classification = extractUPIEntity(
+    doc.rawDescription || '',
+    doc.payeeName || '',
+    doc.vpaHandle || ''
+  );
+
+  if (!doc.cleanMerchant) {
+    doc.cleanMerchant = classification.cleanName;
+  }
+  if (!doc.accountType) {
+    doc.accountType = classification.accountType;
+  }
+  if (!doc.category) {
+    doc.category = classification.category;
+  }
+  if (!doc.tier) {
+    doc.tier = classification.tier;
+  }
+  if (doc.isRecurring === undefined) {
+    doc.isRecurring = classification.isRecurring;
+  }
+  if (doc.isInternalTransfer === undefined) {
+    doc.isInternalTransfer = classification.isSelfTransfer;
+  }
+  if (doc.isRefundOrReversal === undefined) {
+    doc.isRefundOrReversal = classification.isRefund;
+  }
+  if (!doc.direction) {
+    doc.direction = (doc.amount && doc.amount > 0) ? 'CREDIT' : 'DEBIT';
+  }
+
+  return doc;
+}
+
+// 1. GET: Fetch transactions from MongoDB Atlas
 export async function GET(req: NextRequest) {
   try {
     await connectToDatabase();
-    const transactions = await TransactionModel.find({})
+    const { searchParams } = new URL(req.url);
+    const accountType = searchParams.get('accountType');
+    const category = searchParams.get('category');
+
+    const filter: any = {};
+    if (accountType) {
+      filter.accountType = accountType;
+    }
+    if (category) {
+      filter.category = category;
+    }
+
+    const transactions = await TransactionModel.find(filter)
       .sort({ timestamp: -1 })
-      .limit(200)
+      .limit(300)
       .lean();
 
-    return NextResponse.json({ success: true, count: transactions.length, transactions });
+    const merchantCount = transactions.filter((t: any) => t.accountType === 'Merchant / Business').length;
+    const personalCount = transactions.filter((t: any) => t.accountType === 'Personal').length;
+
+    return NextResponse.json({ 
+      success: true, 
+      count: transactions.length, 
+      merchantCount,
+      personalCount,
+      database: 'happypocket',
+      collection: 'transactions',
+      transactions 
+    });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
 
-// 2. POST: Create one or multiple transactions
+// 2. POST: Create one or multiple transactions (with automatic cleaning & Merchant vs Personal categorization)
 export async function POST(req: NextRequest) {
   try {
     await connectToDatabase();
     const body = await req.json();
 
     if (Array.isArray(body)) {
-      const sanitized = body.map(t => {
-        const doc: any = { ...t };
-        if (doc.id && !doc._id && mongoose.isValidObjectId(doc.id)) {
-          doc._id = doc.id;
-        } else {
-          delete doc.id;
-        }
-        return doc;
-      });
+      const sanitized = body.map(cleanAndCategorizeTx);
       const docs = await TransactionModel.insertMany(sanitized, { ordered: false });
-      return NextResponse.json({ success: true, count: docs.length, data: docs });
+      return NextResponse.json({ 
+        success: true, 
+        count: docs.length, 
+        message: 'Transactions categorized and saved to MongoDB Atlas',
+        database: 'happypocket',
+        collection: 'transactions',
+        data: docs 
+      });
     } else {
-      const docData: any = { ...body };
-      if (docData.id && !docData._id && mongoose.isValidObjectId(docData.id)) {
-        docData._id = docData.id;
-      } else {
-        delete docData.id;
-      }
+      const docData = cleanAndCategorizeTx(body);
       const doc = await TransactionModel.create(docData);
-      return NextResponse.json({ success: true, data: doc });
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Transaction categorized and saved to MongoDB Atlas',
+        database: 'happypocket',
+        collection: 'transactions',
+        data: doc 
+      });
     }
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
