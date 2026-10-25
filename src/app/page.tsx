@@ -571,7 +571,11 @@ export default function HappyPocketApp() {
 
                       {/* Content */}
                       <div className="px-4 py-1">
-                        <ExpenseTrackerTab transactions={transactions} rawTransactions={extractedRawTxs} />
+                        <ExpenseTrackerTab 
+                          transactions={transactions} 
+                          rawTransactions={extractedRawTxs} 
+                          onNavigateToAdvisor={() => setActiveTab('insights')}
+                        />
                       </div>
 
                       {/* Bottom Navigation */}
@@ -789,7 +793,11 @@ export default function HappyPocketApp() {
 
                     {activeTab === 'expense' && (
                       <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                        <ExpenseTrackerTab transactions={transactions} rawTransactions={extractedRawTxs} />
+                        <ExpenseTrackerTab 
+                          transactions={transactions} 
+                          rawTransactions={extractedRawTxs} 
+                          onNavigateToAdvisor={() => setActiveTab('insights')}
+                        />
                       </div>
                     )}
 

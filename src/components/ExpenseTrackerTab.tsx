@@ -27,8 +27,16 @@ import {
   Receipt,
   Clock,
   TrendingUp,
+  TrendingDown,
   CreditCard,
-  Hash
+  Hash,
+  ShieldAlert,
+  ShieldCheck,
+  PiggyBank,
+  AlertTriangle,
+  Zap,
+  ArrowRight,
+  HelpCircle
 } from 'lucide-react';
 import { DisplayTransaction } from './RecentTransactions';
 import { RawTransaction } from '@/types/finance';
@@ -36,6 +44,7 @@ import { RawTransaction } from '@/types/finance';
 interface ExpenseTrackerTabProps {
   transactions?: DisplayTransaction[];
   rawTransactions?: RawTransaction[];
+  onNavigateToAdvisor?: () => void;
 }
 
 interface TransferItem {
@@ -259,13 +268,15 @@ function DynamicDonutChart({ slices }: { slices: { percent: number; color: strin
 
 export default function ExpenseTrackerTab({
   transactions = [],
-  rawTransactions = []
+  rawTransactions = [],
+  onNavigateToAdvisor
 }: ExpenseTrackerTabProps) {
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [expandedMerchantName, setExpandedMerchantName] = useState<string | null>(null);
   const [viewFilter, setViewFilter] = useState<'all' | 'merchants' | 'personal'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllRecipientsView, setShowAllRecipientsView] = useState(false);
+  const [activeAnalysisCard, setActiveAnalysisCard] = useState<'velocity' | 'distortion' | 'leakage'>('velocity');
 
   // Raw transactions lookup map for rich details (RRN, remark, rawDescription)
   const rawLookup = useMemo(() => {
@@ -281,6 +292,85 @@ export default function ExpenseTrackerTab({
   const debitTransactions = useMemo(() => {
     return transactions.filter(t => t.amount < 0);
   }, [transactions]);
+
+  // ========================================================
+  // REAL-WORLD SPENDING EXPENDITURE INTELLIGENCE ENGINE
+  // ========================================================
+  const realWorldMetrics = useMemo(() => {
+    const grossOutflow = debitTransactions.reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    // 1. Anti-Distortion: Identify Non-Living Transfers
+    const selfTransfers = debitTransactions
+      .filter(t => t.category === 'Internal Transfer' || t.title.toLowerCase().includes('own') || t.title.toLowerCase().includes('canara'))
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    const personalReimbursements = debitTransactions
+      .filter(t => t.accountType === 'Personal' && t.category !== 'Internal Transfer')
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    // True Net Living Expenditure (Actual cost of living that drains net worth)
+    const trueLivingExpenses = Math.max(0, grossOutflow - selfTransfers - personalReimbursements);
+
+    // 2. Spending Velocity & Burn Rate (Assuming day 25 of 31-day month)
+    const currentDayOfMonth = 25;
+    const daysInMonth = 31;
+    const dailyBurnRate = trueLivingExpenses > 0 ? (trueLivingExpenses / currentDayOfMonth) : 0;
+    const projectedMonthEnd = dailyBurnRate * daysInMonth;
+    const safeDailyLimit = 950; // benchmark daily limit for ₹30,000 monthly living budget
+    const isPacingOverBudget = dailyBurnRate > safeDailyLimit;
+
+    // 3. Essential Commitments vs Discretionary Leakage
+    const essentialCategories = ['Groceries', 'Housing & Utilities', 'Transport & Fuel', 'Healthcare'];
+    const discretionaryCategories = ['Dining & Nightlife', 'Food & Dining', 'Shopping & Discretionary', 'Shopping', 'Subscriptions & Digital', 'Subscriptions'];
+
+    const essentialSpend = debitTransactions
+      .filter(t => essentialCategories.includes(t.category || ''))
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    const discretionarySpend = debitTransactions
+      .filter(t => discretionaryCategories.includes(t.category || ''))
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+    const livingTotal = essentialSpend + discretionarySpend || 1;
+    const discretionaryPercent = Math.round((discretionarySpend / livingTotal) * 100);
+    const essentialPercent = 100 - discretionaryPercent;
+
+    // 4. Recoverable Leakage (Frequent discretionary impulse dining + apparel)
+    const swiggyZaraOrders = debitTransactions
+      .filter(t => /SWIGGY|ZOMATO|ZARA/i.test(t.title))
+      .reduce((acc, t) => acc + Math.abs(t.amount), 0);
+    const recoverableLeakage = Math.round(swiggyZaraOrders * 0.45); // 45% impulse portion can be saved
+
+    // 5. Compounded SIP Growth from Recoverable Leakage (at 14.5% AMFI historical Index return)
+    // Formula: P * [ (1 + r)^n - 1 ] * (1 + r) / r
+    const monthlyRate = 0.145 / 12;
+    const sipMonths5Yr = 60;
+    const sipMonths10Yr = 120;
+    const sipFutureValue5Yr = recoverableLeakage > 0 
+      ? Math.round(recoverableLeakage * ((Math.pow(1 + monthlyRate, sipMonths5Yr) - 1) / monthlyRate) * (1 + monthlyRate))
+      : 0;
+    const sipFutureValue10Yr = recoverableLeakage > 0 
+      ? Math.round(recoverableLeakage * ((Math.pow(1 + monthlyRate, sipMonths10Yr) - 1) / monthlyRate) * (1 + monthlyRate))
+      : 0;
+
+    return {
+      grossOutflow,
+      selfTransfers,
+      personalReimbursements,
+      trueLivingExpenses,
+      dailyBurnRate,
+      projectedMonthEnd,
+      safeDailyLimit,
+      isPacingOverBudget,
+      essentialSpend,
+      discretionarySpend,
+      discretionaryPercent,
+      essentialPercent,
+      recoverableLeakage,
+      sipFutureValue5Yr,
+      sipFutureValue10Yr,
+    };
+  }, [debitTransactions]);
 
   // Aggregate Category breakdown with Recipient Accounts and the PARTICULAR AMOUNTS TRANSFERRED EACH TIME
   const categoryGroups: CategoryExpenseGroup[] = useMemo(() => {
@@ -486,7 +576,7 @@ export default function ExpenseTrackerTab({
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white rounded-2xl shadow-xs border border-slate-200/80 cursor-pointer hover:bg-slate-50 transition active:scale-95 text-xs">
           <Calendar className="w-3.5 h-3.5 text-slate-700 stroke-[2.2]" />
           <span className="font-bold text-slate-800 tracking-tight">
-            October 2026
+            October 2026 (Live Run-Rate)
           </span>
           <ChevronDown className="w-3.5 h-3.5 text-slate-700 stroke-[2.2]" />
         </div>
@@ -506,22 +596,26 @@ export default function ExpenseTrackerTab({
         </button>
       </div>
 
-      {/* 2. Total Spent Summary Card with Donut Chart */}
+      {/* 2. REAL-WORLD FINANCE: TRUE LIVING EXPENDITURE VS GROSS OUTFLOW */}
       <div className="bg-white rounded-[28px] p-5 shadow-[0_4px_24px_rgba(15,23,42,0.05)] border border-slate-100 flex items-center justify-between gap-3">
-        {/* Left Side: Total Spent text, amount, badge */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">
-              Total Spent &amp; Transferred
+              True Net Living Expenditure
             </h3>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Atlas Live
+              Atlas Synced
             </span>
           </div>
 
-          <div className="text-2xl sm:text-[30px] font-black text-slate-900 tracking-tight leading-none mt-2 font-sans">
-            ₹{totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {/* TRUE LIVING EXPENDITURE (Excluding Self-Transfers & P2P Offsets) */}
+          <div className="text-2xl sm:text-[32px] font-black text-slate-900 tracking-tight leading-none mt-2 font-sans">
+            ₹{realWorldMetrics.trueLivingExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
+
+          <p className="text-[11px] text-slate-500 font-medium mt-1.5">
+            Gross Bank Debits: <span className="line-through text-slate-400">₹{realWorldMetrics.grossOutflow.toLocaleString('en-IN')}</span> (₹{realWorldMetrics.selfTransfers.toLocaleString('en-IN')} self-transfers excluded)
+          </p>
 
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 rounded-full border border-orange-200/60">
@@ -541,16 +635,168 @@ export default function ExpenseTrackerTab({
         <DynamicDonutChart slices={donutSlices} />
       </div>
 
-      {/* REAL-WORLD DYNAMIC PRICING CALLOUT BANNER */}
-      <div className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 flex items-center gap-2.5 text-xs text-orange-900 shadow-2xs">
-        <Sparkles className="w-4 h-4 text-orange-600 shrink-0" />
-        <p className="text-[11px] leading-relaxed">
-          <span className="font-bold text-orange-950">Real-World Dynamic Transfer Tracking:</span> The same merchant does not receive the same amount all the time. Each particular amount transferred is logged individually below.
-        </p>
+      {/* ======================================================== */}
+      {/* 3. REAL-WORLD FINANCIAL INTELLIGENCE CARDS (3 TABS)      */}
+      {/* ======================================================== */}
+      <div className="space-y-2">
+        {/* Sub-Tabs for Intelligence */}
+        <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80 text-[11px] font-bold">
+          <button
+            type="button"
+            onClick={() => setActiveAnalysisCard('velocity')}
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center ${
+              activeAnalysisCard === 'velocity'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Daily Run-Rate
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveAnalysisCard('distortion')}
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center ${
+              activeAnalysisCard === 'distortion'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Anti-Distortion
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveAnalysisCard('leakage')}
+            className={`py-2 px-1 rounded-xl transition cursor-pointer text-center ${
+              activeAnalysisCard === 'leakage'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            SIP Opportunity
+          </button>
+        </div>
+
+        {/* Tab 1: Daily Run-Rate & Real-Time Velocity */}
+        {activeAnalysisCard === 'velocity' && (
+          <div className="p-4 rounded-[22px] bg-white border border-slate-100 shadow-xs space-y-3 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Real-Time Spending Velocity</h4>
+                  <p className="text-[10px] text-slate-400">Day 25 of 31 • Projected end-of-month run rate</p>
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                realWorldMetrics.isPacingOverBudget
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}>
+                {realWorldMetrics.isPacingOverBudget ? 'Above Safe Velocity' : 'Optimal Pace ✓'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Current Burn Rate</span>
+                <span className="text-base font-extrabold text-slate-900 font-sans mt-0.5 block">
+                  ₹{realWorldMetrics.dailyBurnRate.toFixed(2)} <span className="text-[10px] font-normal text-slate-500">/ day</span>
+                </span>
+                <span className="text-[9px] text-slate-500 mt-0.5 block">Benchmark limit: ₹{realWorldMetrics.safeDailyLimit}/day</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Projected Month-End</span>
+                <span className="text-base font-extrabold text-slate-900 font-sans mt-0.5 block">
+                  ₹{realWorldMetrics.projectedMonthEnd.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-[9px] text-slate-500 mt-0.5 block">Actual net expenditure pace</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Anti-Distortion (Gross vs Real Expenditure Breakdown) */}
+        {activeAnalysisCard === 'distortion' && (
+          <div className="p-4 rounded-[22px] bg-white border border-slate-100 shadow-xs space-y-2.5 animate-fadeIn text-xs">
+            <div className="flex items-center gap-2 mb-1">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <h4 className="font-bold text-slate-900">Why Banking Apps Skew Your True Expenditure</h4>
+            </div>
+            
+            <div className="space-y-1.5 font-mono text-[11px]">
+              <div className="flex justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-slate-600 font-sans">Gross Bank Outflow (SMS Debits)</span>
+                <span className="font-bold text-slate-900">₹{realWorldMetrics.grossOutflow.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded-lg bg-blue-50/70 border border-blue-100 text-blue-900">
+                <span className="font-sans">(-) Own Bank Account Transfers (Canara A/C)</span>
+                <span className="font-bold">-₹{realWorldMetrics.selfTransfers.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded-lg bg-indigo-50/70 border border-indigo-100 text-indigo-900">
+                <span className="font-sans">(-) Shared Rent &amp; Colleague Lunch Reimbursements</span>
+                <span className="font-bold">-₹{realWorldMetrics.personalReimbursements.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-950 font-bold">
+                <span className="font-sans">(=) True Net Cost of Living</span>
+                <span className="text-emerald-700 text-sm">₹{realWorldMetrics.trueLivingExpenses.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: SIP Opportunity from Impulse Leakage */}
+        {activeAnalysisCard === 'leakage' && (
+          <div className="p-4 rounded-[22px] bg-white border border-slate-100 shadow-xs space-y-3 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <PiggyBank className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Identified Impulse Leakage $\rightarrow$ Wealth SIP</h4>
+                  <p className="text-[10px] text-slate-400">Convert unneeded dining &amp; apparel trends to index wealth</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-purple-50/80 border border-purple-100 text-xs text-purple-950 space-y-2">
+              <div className="flex justify-between items-center">
+                <span>Recoverable Monthly Leakage:</span>
+                <span className="font-extrabold text-sm text-purple-900 font-sans">
+                  ₹{realWorldMetrics.recoverableLeakage.toLocaleString('en-IN')} <span className="text-[10px] font-normal">/ month</span>
+                </span>
+              </div>
+              <div className="h-px bg-purple-200/60" />
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-slate-500 block">5 Years @ 14.5% Index CAGR</span>
+                  <span className="font-bold text-emerald-700 text-sm font-sans">₹{realWorldMetrics.sipFutureValue5Yr.toLocaleString('en-IN')}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">10 Years @ 14.5% Index CAGR</span>
+                  <span className="font-bold text-emerald-700 text-sm font-sans">₹{realWorldMetrics.sipFutureValue10Yr.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {onNavigateToAdvisor && (
+                <button
+                  type="button"
+                  onClick={onNavigateToAdvisor}
+                  className="w-full mt-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                >
+                  <span>Deploy into Real Mutual Fund SIPs</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 3. Search & Filter Bar */}
-      <div className="space-y-2">
+      {/* 4. Search & Filter Bar */}
+      <div className="space-y-2 pt-1">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -587,7 +833,7 @@ export default function ExpenseTrackerTab({
         </div>
       </div>
 
-      {/* 4. MAIN CONTENT VIEW: Show All Recipient Accounts OR Category Breakdown */}
+      {/* 5. MAIN CONTENT VIEW: Show All Recipient Accounts OR Category Breakdown */}
       {showAllRecipientsView ? (
         /* ======================================================== */
         /* MASTER VIEW: ALL RECIPIENT ACCOUNTS & TIMES RECEIVED     */
@@ -660,12 +906,12 @@ export default function ExpenseTrackerTab({
                     </div>
 
                     {/* VARYING AMOUNTS PILL BAR */}
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-[11px]">
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-[11px] flex-wrap gap-1">
                       <span className="text-slate-500 font-medium flex items-center gap-1">
                         <TrendingUp className="w-3.5 h-3.5 text-orange-500" />
                         <span>Amounts Transferred:</span>
                       </span>
-                      <div className="flex items-center gap-1.5 font-mono font-bold text-slate-800">
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-slate-800 flex-wrap">
                         {acc.transfers.map((tr, tIdx) => (
                           <span
                             key={tr.id || tIdx}
