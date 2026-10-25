@@ -14,6 +14,8 @@ export interface DisplayTransaction {
   category?: string;
   theme?: string;
   themeIcon?: string;
+  vpaHandle?: string;
+  payeeName?: string;
 }
 
 export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [

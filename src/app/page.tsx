@@ -84,6 +84,9 @@ export default function HappyPocketApp() {
             txMode: t.txMode || 'UPI',
             upiRrn: t.upiRrn,
             payeeName: t.payeeName,
+            vpaHandle: t.vpaHandle,
+            theme: t.theme,
+            themeIcon: t.themeIcon,
             accountType: t.accountType || (t.isInternalTransfer ? 'Personal' : 'Merchant / Business'),
             isInternalTransfer: t.isInternalTransfer || false,
             isReimbursementOffset: t.isReimbursementOffset || false,
@@ -107,6 +110,8 @@ export default function HappyPocketApp() {
             accountType: item.accountType,
             theme: item.theme,
             themeIcon: item.themeIcon,
+            vpaHandle: item.vpaHandle,
+            payeeName: item.payeeName,
             category: item.category,
           }));
 
@@ -154,6 +159,8 @@ export default function HappyPocketApp() {
       accountType: txDoc?.accountType || 'Merchant / Business',
       theme: txDoc?.theme,
       themeIcon: txDoc?.themeIcon,
+      vpaHandle: txDoc?.vpaHandle,
+      payeeName: txDoc?.payeeName || merchant,
       category: txDoc?.category,
     };
     setTransactions((prev) => [newTx, ...prev]);
@@ -201,6 +208,8 @@ export default function HappyPocketApp() {
       accountType: 'Personal',
       theme: txDoc?.theme,
       themeIcon: txDoc?.themeIcon,
+      vpaHandle: txDoc?.vpaHandle,
+      payeeName: txDoc?.payeeName || recipient,
       category: isSelf ? 'Internal Transfer' : 'Reimbursement / Split',
     };
     setTransactions((prev) => [newTx, ...prev]);
@@ -562,7 +571,7 @@ export default function HappyPocketApp() {
 
                       {/* Content */}
                       <div className="px-4 py-1">
-                        <ExpenseTrackerTab />
+                        <ExpenseTrackerTab transactions={transactions} rawTransactions={extractedRawTxs} />
                       </div>
 
                       {/* Bottom Navigation */}
@@ -780,7 +789,7 @@ export default function HappyPocketApp() {
 
                     {activeTab === 'expense' && (
                       <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
-                        <ExpenseTrackerTab />
+                        <ExpenseTrackerTab transactions={transactions} rawTransactions={extractedRawTxs} />
                       </div>
                     )}
 

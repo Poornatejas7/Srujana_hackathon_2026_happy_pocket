@@ -1,95 +1,180 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Calendar, 
   ChevronDown, 
+  ChevronUp,
   ArrowDown, 
+  ArrowUpRight,
   Utensils, 
   ShoppingCart, 
   Play, 
   Fuel, 
-  MoreHorizontal 
+  MoreHorizontal,
+  Home,
+  HeartPulse,
+  Send,
+  Building2,
+  Tag,
+  Search,
+  Filter,
+  Users,
+  Store,
+  Layers,
+  Sparkles,
+  CheckCircle2,
+  Receipt,
+  Clock,
+  TrendingUp,
+  CreditCard,
+  Hash
 } from 'lucide-react';
+import { DisplayTransaction } from './RecentTransactions';
+import { RawTransaction } from '@/types/finance';
 
-interface ExpenseCategory {
-  id: string;
-  name: string;
-  amount: string;
-  percent: number;
-  iconBg: string;
-  barColor: string;
-  icon: React.ComponentType<{ className?: string }>;
+interface ExpenseTrackerTabProps {
+  transactions?: DisplayTransaction[];
+  rawTransactions?: RawTransaction[];
 }
 
-const EXPENSE_CATEGORIES: ExpenseCategory[] = [
-  {
-    id: 'food',
-    name: 'Food & Dining',
-    amount: '₹4,200',
-    percent: 34,
-    iconBg: 'bg-[#FF8A00]',
-    barColor: 'bg-[#6366F1]',
+interface TransferItem {
+  id: string;
+  transferIndex: number;
+  date: string;
+  timeText?: string;
+  amount: number; // Particular amount transferred that time
+  rrn?: string;
+  remark?: string;
+  rawDescription?: string;
+}
+
+interface RecipientAccountSummary {
+  name: string;
+  vpaHandle: string;
+  theme: string;
+  themeIcon: string;
+  accountType: 'Merchant / Business' | 'Personal';
+  count: number; // how many times this account received money
+  totalAmount: number;
+  minAmount: number;
+  maxAmount: number;
+  avgAmount: number;
+  hasVaryingAmounts: boolean;
+  transfers: TransferItem[]; // List of particular transfers with their exact amounts
+}
+
+interface CategoryExpenseGroup {
+  category: string;
+  totalAmount: number;
+  percent: number;
+  txCount: number; // how many times money was sent in this category
+  icon: React.ComponentType<{ className?: string }>;
+  iconBg: string;
+  barColor: string;
+  recipients: RecipientAccountSummary[];
+}
+
+// Icon and color map per Category
+const CATEGORY_STYLE_MAP: Record<string, {
+  icon: React.ComponentType<{ className?: string }>;
+  iconBg: string;
+  barColor: string;
+  donutColor: string;
+}> = {
+  'Food & Dining': {
     icon: Utensils,
+    iconBg: 'bg-[#FF8A00]',
+    barColor: 'bg-[#FF8A00]',
+    donutColor: '#FF9500',
   },
-  {
-    id: 'shopping',
-    name: 'Shopping',
-    amount: '₹3,000',
-    percent: 24,
+  'Dining & Nightlife': {
+    icon: Utensils,
+    iconBg: 'bg-[#FF8A00]',
+    barColor: 'bg-[#FF8A00]',
+    donutColor: '#FF9500',
+  },
+  'Groceries': {
+    icon: ShoppingCart,
+    iconBg: 'bg-[#10B981]',
+    barColor: 'bg-[#10B981]',
+    donutColor: '#10B981',
+  },
+  'Shopping & Discretionary': {
+    icon: ShoppingCart,
     iconBg: 'bg-[#2F80ED]',
     barColor: 'bg-[#2F80ED]',
-    icon: ShoppingCart,
+    donutColor: '#2F80ED',
   },
-  {
-    id: 'subscriptions',
-    name: 'Subscriptions',
-    amount: '₹1,500',
-    percent: 12,
+  'Shopping': {
+    icon: ShoppingCart,
+    iconBg: 'bg-[#2F80ED]',
+    barColor: 'bg-[#2F80ED]',
+    donutColor: '#2F80ED',
+  },
+  'Subscriptions & Digital': {
+    icon: Play,
     iconBg: 'bg-[#8B5CF6]',
     barColor: 'bg-[#8B5CF6]',
+    donutColor: '#8B5CF6',
+  },
+  'Subscriptions': {
     icon: Play,
+    iconBg: 'bg-[#8B5CF6]',
+    barColor: 'bg-[#8B5CF6]',
+    donutColor: '#8B5CF6',
   },
-  {
-    id: 'travel',
-    name: 'Fuel & Travel',
-    amount: '₹1,250',
-    percent: 10,
-    iconBg: 'bg-[#10B981]',
-    barColor: 'bg-[#34D399]',
+  'Transport & Fuel': {
     icon: Fuel,
+    iconBg: 'bg-[#F59E0B]',
+    barColor: 'bg-[#F59E0B]',
+    donutColor: '#F59E0B',
   },
-  {
-    id: 'others',
-    name: 'Others',
-    amount: '₹2,500',
-    percent: 20,
+  'Healthcare': {
+    icon: HeartPulse,
+    iconBg: 'bg-[#EF4444]',
+    barColor: 'bg-[#EF4444]',
+    donutColor: '#EF4444',
+  },
+  'Housing & Utilities': {
+    icon: Home,
+    iconBg: 'bg-[#06B6D4]',
+    barColor: 'bg-[#06B6D4]',
+    donutColor: '#06B6D4',
+  },
+  'Reimbursement / Split': {
+    icon: Send,
+    iconBg: 'bg-[#3B82F6]',
+    barColor: 'bg-[#3B82F6]',
+    donutColor: '#3B82F6',
+  },
+  'Internal Transfer': {
+    icon: Building2,
+    iconBg: 'bg-[#64748B]',
+    barColor: 'bg-[#64748B]',
+    donutColor: '#64748B',
+  },
+  'Others': {
+    icon: MoreHorizontal,
     iconBg: 'bg-[#94A3B8]',
     barColor: 'bg-[#94A3B8]',
-    icon: MoreHorizontal,
+    donutColor: '#94A3B8',
   },
-];
+};
 
 // SVG Donut Chart helper calculating exact donut slices with gap
-function DonutChart() {
-  const size = 114;
+function DynamicDonutChart({ slices }: { slices: { percent: number; color: string; label: string }[] }) {
+  const size = 118;
   const center = size / 2;
   const outerR = 48;
   const innerR = 27;
 
-  // Slices: [percent, color]
-  const slices = [
-    { percent: 34, color: '#FF9500' }, // Orange - Food & Dining
-    { percent: 24, color: '#2F80ED' }, // Blue - Shopping
-    { percent: 12, color: '#8B5CF6' }, // Purple - Subscriptions
-    { percent: 10, color: '#10B981' }, // Green - Travel
-    { percent: 20, color: '#60A5FA' }, // Light Blue - Others
-  ];
+  const validSlices = slices.length > 0 ? slices : [{ percent: 100, color: '#E2E8F0', label: 'No Data' }];
 
-  let accumulatedAngle = -75; // Starting top-right tilt like in screenshot
+  let accumulatedAngle = -90;
 
-  const paths = slices.map((slice, index) => {
-    const angle = (slice.percent / 100) * 360;
+  const paths = validSlices.map((slice, index) => {
+    const angle = Math.max(2, (slice.percent / 100) * 360);
     const startAngle = accumulatedAngle;
     const endAngle = accumulatedAngle + angle;
     accumulatedAngle = endAngle;
@@ -124,12 +209,14 @@ function DonutChart() {
         fill={slice.color}
         stroke="#FFFFFF"
         strokeWidth="2.5"
-      />
+      >
+        <title>{slice.label}: {slice.percent.toFixed(1)}%</title>
+      </path>
     );
   });
 
   return (
-    <div className="relative w-[114px] h-[114px] flex items-center justify-center shrink-0">
+    <div className="relative w-[118px] h-[118px] flex items-center justify-center shrink-0">
       <svg
         width={size}
         height={size}
@@ -137,7 +224,6 @@ function DonutChart() {
         className="overflow-visible"
       >
         {paths}
-        {/* Center white circle */}
         <circle cx={center} cy={center} r={innerR - 1.5} fill="#FFFFFF" />
       </svg>
 
@@ -150,7 +236,6 @@ function DonutChart() {
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          {/* Wallet main body */}
           <rect
             x="1.5"
             y="2.5"
@@ -161,14 +246,12 @@ function DonutChart() {
             strokeWidth="2.2"
             fill="none"
           />
-          {/* Wallet right clasp tab */}
           <path
             d="M17 7.5H22.5C23.8807 7.5 25 8.61929 25 10V12C25 13.3807 23.8807 14.5 22.5 14.5H17"
             stroke="#1E293B"
             strokeWidth="2.2"
             fill="#FFFFFF"
           />
-          {/* Clasp inner button */}
           <circle cx="21" cy="11" r="1.3" fill="#1E293B" />
         </svg>
       </div>
@@ -176,97 +259,678 @@ function DonutChart() {
   );
 }
 
-export default function ExpenseTrackerTab() {
+export default function ExpenseTrackerTab({
+  transactions = [],
+  rawTransactions = []
+}: ExpenseTrackerTabProps) {
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
+  const [expandedMerchantName, setExpandedMerchantName] = useState<string | null>(null);
+  const [viewFilter, setViewFilter] = useState<'all' | 'merchants' | 'personal'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAllRecipientsView, setShowAllRecipientsView] = useState(false);
+
+  // Raw transactions lookup map for rich details (RRN, remark, rawDescription)
+  const rawLookup = useMemo(() => {
+    const map = new Map<string, RawTransaction>();
+    rawTransactions.forEach(r => {
+      if (r.id) map.set(r.id, r);
+      if (r.rawDescription) map.set(r.rawDescription, r);
+    });
+    return map;
+  }, [rawTransactions]);
+
+  // Filter only outgoing debit transactions
+  const debitTransactions = useMemo(() => {
+    return transactions.filter(t => t.amount < 0);
+  }, [transactions]);
+
+  // Aggregate Category breakdown with Recipient Accounts and the PARTICULAR AMOUNTS TRANSFERRED EACH TIME
+  const categoryGroups: CategoryExpenseGroup[] = useMemo(() => {
+    if (!debitTransactions || debitTransactions.length === 0) {
+      return [];
+    }
+
+    const catMap = new Map<string, {
+      totalAmount: number;
+      txCount: number;
+      recipientsMap: Map<string, {
+        name: string;
+        vpaHandle: string;
+        theme: string;
+        themeIcon: string;
+        accountType: 'Merchant / Business' | 'Personal';
+        transfers: TransferItem[];
+      }>;
+    }>();
+
+    debitTransactions.forEach(t => {
+      // Apply view filter (merchants vs personal)
+      if (viewFilter === 'merchants' && t.accountType !== 'Merchant / Business') return;
+      if (viewFilter === 'personal' && t.accountType !== 'Personal') return;
+
+      const catName = t.category || 'Others';
+      const absAmount = Math.abs(t.amount);
+
+      if (!catMap.has(catName)) {
+        catMap.set(catName, {
+          totalAmount: 0,
+          txCount: 0,
+          recipientsMap: new Map(),
+        });
+      }
+
+      const entry = catMap.get(catName)!;
+      entry.totalAmount += absAmount;
+      entry.txCount += 1;
+
+      // Group recipient account
+      const recipientKey = t.title.trim();
+      if (!entry.recipientsMap.has(recipientKey)) {
+        entry.recipientsMap.set(recipientKey, {
+          name: t.title,
+          vpaHandle: t.vpaHandle || `${t.title.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+          theme: t.theme || 'Commercial Expense',
+          themeIcon: t.themeIcon || (t.accountType === 'Personal' ? '👤' : '🏪'),
+          accountType: t.accountType || 'Merchant / Business',
+          transfers: [],
+        });
+      }
+
+      const rawMatch = rawLookup.get(t.id) || rawLookup.get((t as any).rawDescription);
+      const rec = entry.recipientsMap.get(recipientKey)!;
+
+      // Add particular transfer entry
+      rec.transfers.push({
+        id: t.id,
+        transferIndex: rec.transfers.length + 1,
+        date: t.rawTimeText || new Date(t.timestamp).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }),
+        timeText: new Date(t.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        amount: absAmount, // PARTICULAR AMOUNT TRANSFERRED THIS TIME
+        rrn: rawMatch?.upiRrn || (t as any).upiRrn,
+        remark: rawMatch?.remark || (t as any).remark || (t as any).rawDescription,
+        rawDescription: rawMatch?.rawDescription || (t as any).rawDescription,
+      });
+    });
+
+    const totalAllCategories = Array.from(catMap.values()).reduce((sum, item) => sum + item.totalAmount, 0) || 1;
+
+    const list: CategoryExpenseGroup[] = [];
+    catMap.forEach((val, catName) => {
+      const style = CATEGORY_STYLE_MAP[catName] || CATEGORY_STYLE_MAP['Others'];
+      const percent = Math.round((val.totalAmount / totalAllCategories) * 100);
+      
+      const recipients: RecipientAccountSummary[] = Array.from(val.recipientsMap.values()).map(r => {
+        const totalAmount = r.transfers.reduce((s, x) => s + x.amount, 0);
+        const amounts = r.transfers.map(x => x.amount);
+        const minAmount = Math.min(...amounts);
+        const maxAmount = Math.max(...amounts);
+        const avgAmount = totalAmount / (amounts.length || 1);
+        const hasVaryingAmounts = amounts.length > 1 && minAmount !== maxAmount;
+
+        // Sort transfers from newest to oldest
+        const sortedTransfers = [...r.transfers].reverse().map((tr, idx) => ({
+          ...tr,
+          transferIndex: r.transfers.length - idx
+        }));
+
+        return {
+          name: r.name,
+          vpaHandle: r.vpaHandle,
+          theme: r.theme,
+          themeIcon: r.themeIcon,
+          accountType: r.accountType,
+          count: r.transfers.length,
+          totalAmount,
+          minAmount,
+          maxAmount,
+          avgAmount,
+          hasVaryingAmounts,
+          transfers: sortedTransfers,
+        };
+      }).sort((a, b) => b.totalAmount - a.totalAmount);
+
+      list.push({
+        category: catName,
+        totalAmount: val.totalAmount,
+        percent,
+        txCount: val.txCount,
+        icon: style.icon,
+        iconBg: style.iconBg,
+        barColor: style.barColor,
+        recipients,
+      });
+    });
+
+    // Sort by total expense descending
+    return list.sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [debitTransactions, viewFilter, rawLookup]);
+
+  // Overall Total Spent
+  const totalSpent = useMemo(() => {
+    return categoryGroups.reduce((acc, c) => acc + c.totalAmount, 0);
+  }, [categoryGroups]);
+
+  // Total times money was transferred
+  const totalTimesTransferred = useMemo(() => {
+    return categoryGroups.reduce((acc, c) => acc + c.txCount, 0);
+  }, [categoryGroups]);
+
+  // Master list of all distinct recipient accounts across all categories
+  const allRecipientAccounts = useMemo(() => {
+    const map = new Map<string, RecipientAccountSummary & { category: string }>();
+
+    categoryGroups.forEach(cg => {
+      cg.recipients.forEach(r => {
+        if (!map.has(r.name)) {
+          map.set(r.name, { ...r, category: cg.category });
+        } else {
+          const existing = map.get(r.name)!;
+          const mergedTransfers = [...existing.transfers, ...r.transfers];
+          const totalAmount = mergedTransfers.reduce((s, x) => s + x.amount, 0);
+          const amounts = mergedTransfers.map(x => x.amount);
+          const minAmount = Math.min(...amounts);
+          const maxAmount = Math.max(...amounts);
+          const avgAmount = totalAmount / (amounts.length || 1);
+
+          existing.count = mergedTransfers.length;
+          existing.totalAmount = totalAmount;
+          existing.minAmount = minAmount;
+          existing.maxAmount = maxAmount;
+          existing.avgAmount = avgAmount;
+          existing.hasVaryingAmounts = amounts.length > 1 && minAmount !== maxAmount;
+          existing.transfers = mergedTransfers;
+        }
+      });
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.count - a.count || b.totalAmount - a.totalAmount);
+  }, [categoryGroups]);
+
+  // Filtered by user search
+  const filteredCategoryGroups = useMemo(() => {
+    if (!searchQuery.trim()) return categoryGroups;
+    const q = searchQuery.toLowerCase();
+    return categoryGroups.filter(cg => 
+      cg.category.toLowerCase().includes(q) ||
+      cg.recipients.some(r => 
+        r.name.toLowerCase().includes(q) || 
+        r.vpaHandle.toLowerCase().includes(q) ||
+        r.theme.toLowerCase().includes(q)
+      )
+    );
+  }, [categoryGroups, searchQuery]);
+
+  // Slices for Donut Chart
+  const donutSlices = useMemo(() => {
+    return categoryGroups.map(cg => {
+      const style = CATEGORY_STYLE_MAP[cg.category] || CATEGORY_STYLE_MAP['Others'];
+      return {
+        percent: cg.percent,
+        color: style.donutColor,
+        label: cg.category,
+      };
+    });
+  }, [categoryGroups]);
+
+  const toggleCategoryExpand = (catName: string) => {
+    setExpandedCategoryId(prev => (prev === catName ? null : catName));
+  };
+
+  const toggleMerchantExpand = (merchantName: string) => {
+    setExpandedMerchantName(prev => (prev === merchantName ? null : merchantName));
+  };
+
   return (
-    <div className="w-full space-y-3.5 select-none animate-fadeIn">
-      {/* 1. Date Selector Pill */}
-      <div className="flex items-center justify-center pt-0.5 pb-1">
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-2xl shadow-[0_2px_8px_rgba(15,23,42,0.04)] border border-slate-200/60 cursor-pointer hover:bg-slate-50 transition active:scale-95">
-          <Calendar className="w-4 h-4 text-slate-700 stroke-[2.2]" />
-          <span className="font-bold text-xs sm:text-sm text-slate-800 tracking-tight">
+    <div className="w-full space-y-4 select-none animate-fadeIn">
+      
+      {/* 1. Date Selector Pill & Mode Switch */}
+      <div className="flex items-center justify-between pt-0.5 pb-1 flex-wrap gap-2">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white rounded-2xl shadow-xs border border-slate-200/80 cursor-pointer hover:bg-slate-50 transition active:scale-95 text-xs">
+          <Calendar className="w-3.5 h-3.5 text-slate-700 stroke-[2.2]" />
+          <span className="font-bold text-slate-800 tracking-tight">
             October 2026
           </span>
-          <ChevronDown className="w-4 h-4 text-slate-700 stroke-[2.2]" />
+          <ChevronDown className="w-3.5 h-3.5 text-slate-700 stroke-[2.2]" />
         </div>
+
+        {/* Toggle between Category View and All Accounts View */}
+        <button
+          type="button"
+          onClick={() => setShowAllRecipientsView(!showAllRecipientsView)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+            showAllRecipientsView
+              ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>{showAllRecipientsView ? 'Category View' : 'All Accounts Breakdown'}</span>
+        </button>
       </div>
 
       {/* 2. Total Spent Summary Card with Donut Chart */}
       <div className="bg-white rounded-[28px] p-5 shadow-[0_4px_24px_rgba(15,23,42,0.05)] border border-slate-100 flex items-center justify-between gap-3">
         {/* Left Side: Total Spent text, amount, badge */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">
-            Total Spent
-          </h3>
-          <div className="text-2xl sm:text-[28px] font-black text-slate-900 tracking-tight leading-none mt-2">
-            ₹12,450
-          </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#E8F8EE] rounded-full mt-3 border border-emerald-100/60">
-            <ArrowDown className="w-3.5 h-3.5 text-[#10B981] stroke-[2.5]" />
-            <span className="text-[#10B981] text-[11px] font-bold">
-              8% from last month
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">
+              Total Spent &amp; Transferred
+            </h3>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Atlas Live
             </span>
+          </div>
+
+          <div className="text-2xl sm:text-[30px] font-black text-slate-900 tracking-tight leading-none mt-2 font-sans">
+            ₹{totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 rounded-full border border-orange-200/60">
+              <span className="text-orange-700 text-[11px] font-bold">
+                {totalTimesTransferred} Total Transfers
+              </span>
+            </div>
+            <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 rounded-full">
+              <span className="text-slate-600 text-[11px] font-medium">
+                {allRecipientAccounts.length} Receiving Accounts
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Right Side: Donut Chart with center Wallet Icon */}
-        <DonutChart />
+        {/* Right Side: Donut Chart */}
+        <DynamicDonutChart slices={donutSlices} />
       </div>
 
-      {/* 3. Section Title */}
-      <div className="pt-1 px-1">
-        <h3 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
-          Spending by Category
-        </h3>
+      {/* REAL-WORLD DYNAMIC PRICING CALLOUT BANNER */}
+      <div className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 flex items-center gap-2.5 text-xs text-orange-900 shadow-2xs">
+        <Sparkles className="w-4 h-4 text-orange-600 shrink-0" />
+        <p className="text-[11px] leading-relaxed">
+          <span className="font-bold text-orange-950">Real-World Dynamic Transfer Tracking:</span> The same merchant does not receive the same amount all the time. Each particular amount transferred is logged individually below.
+        </p>
       </div>
 
-      {/* 4. Category Cards List */}
-      <div className="space-y-2.5 pb-1">
-        {EXPENSE_CATEGORIES.map((cat) => {
-          const Icon = cat.icon;
-          return (
-            <div
-              key={cat.id}
-              className="bg-white rounded-[22px] px-4 py-3 flex items-center justify-between shadow-[0_2px_10px_rgba(15,23,42,0.03)] border border-slate-100 hover:border-slate-200 transition"
+      {/* 3. Search & Filter Bar */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search category, merchant, or account name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3.5 py-2 rounded-2xl bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500 shadow-2xs"
+            />
+          </div>
+        </div>
+
+        {/* Filter Chips: All vs Merchants vs Personal */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs">
+          {[
+            { id: 'all', label: `All Outflows (${totalTimesTransferred} times)` },
+            { id: 'merchants', label: 'Merchants & Stores' },
+            { id: 'personal', label: 'Personal Transfers' },
+          ].map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setViewFilter(f.id as any)}
+              className={`px-3 py-1.5 rounded-xl font-bold transition text-[11px] whitespace-nowrap cursor-pointer ${
+                viewFilter === f.id
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/80'
+              }`}
             >
-              {/* Left: Icon, Name & Progress Bar */}
-              <div className="flex items-center gap-3.5 flex-1 min-w-0 mr-3">
-                <div
-                  className={`w-11 h-11 rounded-full ${cat.iconBg} flex items-center justify-center shrink-0 shadow-xs`}
-                >
-                  <Icon
-                    className={`w-5 h-5 text-white ${
-                      cat.id === 'subscriptions' ? 'fill-white' : ''
-                    }`}
-                  />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-[13px] font-bold text-slate-900 truncate">
-                    {cat.name}
-                  </h4>
-                  {/* Progress Bar Track */}
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1.5">
-                    <div
-                      className={`h-full rounded-full ${cat.barColor} transition-all duration-500`}
-                      style={{ width: `${cat.percent}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Right: Amount and Percentage */}
-              <div className="flex items-center gap-2.5 shrink-0">
-                <span className="text-[13px] font-bold text-slate-900 font-sans">
-                  {cat.amount}
-                </span>
-                <span className="text-[11px] font-semibold text-slate-400 w-7 text-right">
-                  {cat.percent}%
-                </span>
-              </div>
-            </div>
-          );
-        })}
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* 4. MAIN CONTENT VIEW: Show All Recipient Accounts OR Category Breakdown */}
+      {showAllRecipientsView ? (
+        /* ======================================================== */
+        /* MASTER VIEW: ALL RECIPIENT ACCOUNTS & TIMES RECEIVED     */
+        /* ======================================================== */
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-orange-500" />
+              <span>All Accounts &amp; Merchants that Received Money ({allRecipientAccounts.length})</span>
+            </h3>
+          </div>
+
+          <div className="space-y-3">
+            {allRecipientAccounts.length === 0 ? (
+              <div className="p-8 text-center bg-white rounded-2xl text-xs text-slate-400 border border-slate-100">
+                No matching accounts found.
+              </div>
+            ) : (
+              allRecipientAccounts.map((acc, idx) => {
+                const isMerchantExpanded = expandedMerchantName === acc.name;
+                return (
+                  <div
+                    key={`${acc.name}_${idx}`}
+                    className="bg-white rounded-[24px] p-4 shadow-2xs border border-slate-100 hover:border-slate-200 transition space-y-3"
+                  >
+                    <div 
+                      onClick={() => toggleMerchantExpand(acc.name)}
+                      className="flex items-center justify-between gap-3 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-11 h-11 rounded-2xl bg-orange-50 text-orange-600 border border-orange-100 flex items-center justify-center text-xl shrink-0">
+                          {acc.themeIcon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                              {acc.name}
+                            </h4>
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0 ${
+                                acc.accountType === 'Merchant / Business'
+                                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                  : 'bg-blue-50 text-blue-700 border border-blue-200'
+                              }`}
+                            >
+                              {acc.accountType === 'Merchant / Business' ? 'Merchant' : 'Personal'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
+                            UPI ID: {acc.vpaHandle}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
+                            Theme: {acc.theme} • {acc.category}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Right: Frequency badge and Total Amount */}
+                      <div className="text-right shrink-0">
+                        <div className="inline-block px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-extrabold mb-1">
+                          Received {acc.count} {acc.count === 1 ? 'time' : 'times'}
+                        </div>
+                        <div className="text-sm font-black text-slate-900 font-sans">
+                          ₹{acc.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-[9px] text-slate-400 font-medium mt-0.5">
+                          {isMerchantExpanded ? 'Tap to collapse' : 'Tap to see each transfer'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* VARYING AMOUNTS PILL BAR */}
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-[11px]">
+                      <span className="text-slate-500 font-medium flex items-center gap-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-orange-500" />
+                        <span>Amounts Transferred:</span>
+                      </span>
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-slate-800">
+                        {acc.transfers.map((tr, tIdx) => (
+                          <span
+                            key={tr.id || tIdx}
+                            className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-xs text-orange-600 shadow-2xs"
+                          >
+                            ₹{tr.amount.toLocaleString('en-IN')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* EXPANDABLE FULL TRANSFER BREAKDOWN TABLE */}
+                    {isMerchantExpanded && (
+                      <div className="pt-2 border-t border-slate-100 space-y-2 animate-fadeIn">
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
+                          <span>Particular Transfers to {acc.name}:</span>
+                          <span className="text-[10px] text-slate-400 lowercase font-mono">
+                            Avg: ₹{acc.avgAmount.toFixed(2)}/transfer
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {acc.transfers.map((tr) => (
+                            <div
+                              key={tr.id}
+                              className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/70 flex items-center justify-between text-xs"
+                            >
+                              <div className="space-y-0.5 min-w-0 flex-1 mr-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    #{tr.transferIndex}
+                                  </span>
+                                  <span className="font-bold text-slate-900 truncate">
+                                    {tr.remark || tr.rawDescription}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-slate-500 pl-7 font-mono">
+                                  <span>{tr.date} {tr.timeText ? `at ${tr.timeText}` : ''}</span>
+                                  {tr.rrn && <span>• Ref: {tr.rrn}</span>}
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className="font-extrabold font-sans text-sm text-slate-900 block">
+                                  ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                  Particular Transfer
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ======================================================== */
+        /* CATEGORY BREAKDOWN WITH TIMES SENT & RECIPIENT ACCOUNTS */
+        /* ======================================================== */
+        <div className="space-y-3 pb-1">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
+              Spending by Category &amp; Recipient Breakdown
+            </h3>
+            <span className="text-[10px] text-slate-400 font-semibold">
+              Tap any category to inspect accounts
+            </span>
+          </div>
+
+          {filteredCategoryGroups.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-2xl text-xs text-slate-400 border border-slate-100">
+              No expenses recorded yet in MongoDB Atlas.
+            </div>
+          ) : (
+            filteredCategoryGroups.map((cat) => {
+              const Icon = cat.icon;
+              const isExpanded = expandedCategoryId === cat.category;
+
+              return (
+                <div
+                  key={cat.category}
+                  className="bg-white rounded-[24px] shadow-2xs border border-slate-100 hover:border-slate-200 transition overflow-hidden"
+                >
+                  {/* Category Card Header */}
+                  <div
+                    onClick={() => toggleCategoryExpand(cat.category)}
+                    className="px-4 py-3.5 flex items-center justify-between cursor-pointer group"
+                  >
+                    {/* Left: Icon, Name & Progress Bar */}
+                    <div className="flex items-center gap-3.5 flex-1 min-w-0 mr-3">
+                      <div
+                        className={`w-11 h-11 rounded-full ${cat.iconBg} flex items-center justify-center shrink-0 shadow-xs`}
+                      >
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-[13px] font-bold text-slate-900 group-hover:text-orange-600 transition truncate">
+                            {cat.category}
+                          </h4>
+                          {/* REQUIRED: Show how many times money was sent in each category */}
+                          <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200 text-[10px] font-extrabold shrink-0">
+                            Sent {cat.txCount} {cat.txCount === 1 ? 'time' : 'times'}
+                          </span>
+                        </div>
+
+                        {/* Progress Bar Track */}
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1.5">
+                          <div
+                            className={`h-full rounded-full ${cat.barColor} transition-all duration-500`}
+                            style={{ width: `${Math.max(4, cat.percent)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Amount, Percentage & Expand Chevron */}
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <div className="text-right">
+                        <span className="text-[13px] font-bold text-slate-900 font-sans block">
+                          ₹{cat.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          {cat.percent}% • {cat.recipients.length} {cat.recipients.length === 1 ? 'account' : 'accounts'}
+                        </span>
+                      </div>
+                      <div className="p-1 rounded-full bg-slate-100 text-slate-500 group-hover:text-slate-800 transition">
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ======================================================== */}
+                  {/* EXPANDED ACCORDION: LIST OF ACCOUNTS & PARTICULAR AMOUNTS*/}
+                  {/* ======================================================== */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-1 bg-slate-50/80 border-t border-slate-100 space-y-3 animate-fadeIn">
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-orange-500" />
+                          <span>Accounts &amp; Names that Received Money in {cat.category}:</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-500">
+                          {cat.recipients.length} receiving accounts
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {cat.recipients.map((rec, rIdx) => (
+                          <div
+                            key={`${rec.name}_${rIdx}`}
+                            className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs hover:border-orange-300 transition space-y-2.5"
+                          >
+                            {/* Merchant / Recipient Account Header */}
+                            <div className="flex items-center justify-between gap-2.5">
+                              {/* Left details */}
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-base shrink-0">
+                                  {rec.themeIcon}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <h5 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                                      {rec.name}
+                                    </h5>
+                                    <span
+                                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0 ${
+                                        rec.accountType === 'Merchant / Business'
+                                          ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                          : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                      }`}
+                                    >
+                                      {rec.accountType === 'Merchant / Business' ? 'Merchant' : 'Personal'}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">
+                                    UPI ID: {rec.vpaHandle}
+                                  </p>
+                                  <p className="text-[10px] text-emerald-600 font-medium truncate mt-0.5">
+                                    Selling Theme: {rec.theme}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Right: Frequency & Total Amount */}
+                              <div className="text-right shrink-0">
+                                <span className="inline-block px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-extrabold">
+                                  Received {rec.count} {rec.count === 1 ? 'time' : 'times'}
+                                </span>
+                                <div className="text-xs sm:text-sm font-black text-slate-900 font-sans mt-0.5">
+                                  ₹{rec.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* PARTICULAR AMOUNT TRANSFERRED EACH TIME (REQUIRED BY USER) */}
+                            <div className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-100 space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                <span className="flex items-center gap-1">
+                                  <Receipt className="w-3 h-3 text-orange-500" />
+                                  <span>Particular Amount Transferred Each Time ({rec.count} transfers):</span>
+                                </span>
+                                {rec.hasVaryingAmounts && (
+                                  <span className="text-[9px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                    Amounts Vary Across Visits
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="space-y-1">
+                                {rec.transfers.map((tr) => (
+                                  <div
+                                    key={tr.id}
+                                    className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/70 flex items-center justify-between text-xs hover:bg-orange-50/30 transition"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                                      <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold flex items-center justify-center shrink-0">
+                                        #{tr.transferIndex}
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-bold text-slate-800 truncate">
+                                          {tr.remark || tr.rawDescription}
+                                        </p>
+                                        <p className="text-[9px] text-slate-400 font-mono">
+                                          {tr.date} {tr.timeText ? `• ${tr.timeText}` : ''} {tr.rrn ? `• Ref: ${tr.rrn}` : ''}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* The Particular Amount */}
+                                    <div className="text-right shrink-0">
+                                      <span className="font-extrabold font-sans text-xs sm:text-sm text-slate-900">
+                                        ₹{tr.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
