@@ -58,7 +58,11 @@ export async function POST(req: NextRequest) {
     try {
       resultJson = await runPython('python');
     } catch {
-      resultJson = await runPython('python3');
+      try {
+        resultJson = await runPython('python3');
+      } catch {
+        resultJson = await runPython('py');
+      }
     }
 
     const parsed = JSON.parse(resultJson);
