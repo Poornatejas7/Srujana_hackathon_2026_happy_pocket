@@ -436,12 +436,12 @@ export default function InsightsTab({ onNavigateTab, className = '', transaction
       <div className="overflow-x-auto scrollbar-none -mx-1 px-1 py-1">
         <div className="inline-flex items-center p-1 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-xs gap-1 min-w-max">
           {[
-            { id: 'overview', label: 'Financial Health', icon: Sparkles },
-            { id: 'subscriptions', label: 'Recurring & AutoPay', icon: Calendar },
-            { id: 'discretionary', label: 'Discretionary Spend', icon: ShoppingBag },
-            { id: 'recommendations', label: 'Smart Insights', icon: Zap },
-            { id: 'investment', label: 'Investment Sandbox', icon: TrendingUp },
-            { id: 'protection', label: 'Protection Planner', icon: ShieldCheck },
+            { id: 'overview', label: 'Overview', icon: Sparkles },
+            { id: 'subscriptions', label: 'AutoPay', icon: Calendar },
+            { id: 'discretionary', label: 'Discretionary', icon: ShoppingBag },
+            { id: 'recommendations', label: 'Insights', icon: Zap },
+            { id: 'investment', label: 'Investments', icon: TrendingUp },
+            { id: 'protection', label: 'Protection', icon: ShieldCheck },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSection === tab.id;
@@ -469,54 +469,43 @@ export default function InsightsTab({ onNavigateTab, className = '', transaction
       {/* ======================================================== */}
       {activeSection === 'overview' && (
         <div className="space-y-3.5 animate-fadeIn">
-          {/* Top Headline Card: Potential Savings Hero */}
-          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 text-white rounded-[28px] p-5 shadow-xl border border-slate-700/80 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-36 h-36 bg-orange-500/15 rounded-full blur-3xl pointer-events-none" />
-            
+          {/* Simplified Potential Savings Hero Card */}
+          <div className="bg-white rounded-[24px] p-4.5 border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-orange-400 bg-orange-950/60 px-2.5 py-1 rounded-full border border-orange-500/30">
-                Potential Savings Engine
-              </span>
-              <span className="text-[11px] font-mono text-slate-400">
-                {overview?.transactionCount || 0} Transactions Analyzed
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <span className="text-xs text-slate-400 block font-medium">Potential Monthly Savings</span>
-                <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-0.5">
-                  ₹{dynamicPotentialSavings.monthly.toLocaleString('en-IN')}
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 stroke-[2.2]" />
                 </div>
-                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5 mt-0.5">
-                  <ArrowUpRight className="w-3 h-3" />
-                  Available for SIP compounder
-                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 tracking-tight">Potential Savings</h3>
+                  <span className="text-[10px] text-slate-400 font-medium">From discretionary spend</span>
+                </div>
               </div>
 
-              <div className="border-l border-slate-700/70 pl-3">
-                <span className="text-xs text-slate-400 block font-medium">Potential Annual Savings</span>
-                <div className="text-2xl sm:text-3xl font-black text-[#F97316] tracking-tight mt-0.5">
-                  ₹{dynamicPotentialSavings.annual.toLocaleString('en-IN')}
-                </div>
-                <span className="text-[10px] text-slate-400 font-medium mt-0.5 block">
-                  12-Month Projected Total
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-              <span className="text-slate-300">
-                Reduce discretionary spend to unlock this wealth
-              </span>
               <button
                 type="button"
                 onClick={() => setActiveSection('investment')}
-                className="inline-flex items-center gap-1 text-orange-400 hover:text-orange-300 font-bold cursor-pointer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs transition cursor-pointer"
               >
                 <span>Project Growth</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-3.5 border-t border-slate-100">
+              <div className="bg-slate-50/70 rounded-xl p-3 border border-slate-100/80">
+                <span className="text-[11px] font-semibold text-slate-500 block">Monthly Savings</span>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
+                  ₹{dynamicPotentialSavings.monthly.toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              <div className="bg-orange-50/50 rounded-xl p-3 border border-orange-100/80">
+                <span className="text-[11px] font-semibold text-orange-700 block">Annual Savings</span>
+                <div className="text-xl sm:text-2xl font-black text-orange-600 tracking-tight mt-0.5">
+                  ₹{dynamicPotentialSavings.annual.toLocaleString('en-IN')}
+                </div>
+              </div>
             </div>
           </div>
 

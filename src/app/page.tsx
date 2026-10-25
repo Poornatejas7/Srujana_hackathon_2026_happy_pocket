@@ -692,6 +692,27 @@ export default function HappyPocketApp() {
     showToast('Transaction deleted successfully.');
   };
 
+  // Seed curated meaningful sample data into MongoDB Atlas
+  const handleSeedSampleData = async () => {
+    try {
+      setIsDbLoading(true);
+      showToast('🌱 Loading meaningful sample data...');
+      const res = await fetch('/api/seed-sample', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        await loadFromDb();
+        showToast('🌱 Loaded 15 realistic Indian UPI & Banking records! Balance: ₹34,432.00');
+      } else {
+        showToast(data.error || 'Failed to seed sample data');
+      }
+    } catch (err) {
+      console.error('Seed error:', err);
+      showToast('Failed to seed sample data');
+    } finally {
+      setIsDbLoading(false);
+    }
+  };
+
   // Android System Navigation Buttons handler
   const handleAndroidBack = () => {
     if (isEditModalOpen) {
@@ -743,90 +764,100 @@ export default function HappyPocketApp() {
     <div className="min-h-screen bg-[#18191C] text-slate-100 flex flex-col font-sans select-none overflow-x-hidden">
       
       {/* ======================================================== */}
-      {/* 1. ANDROID STUDIO IDE TOP WORKSPACE HEADER BAR */}
+      {/* 1. TOP WORKSPACE APPLICATION HEADER */}
       {/* ======================================================== */}
-      <header className="w-full bg-[#1E1F22] border-b border-[#2B2D30] px-4 py-2 flex items-center justify-between text-xs text-slate-300 shrink-0 z-40 shadow-xs">
+      <header className="w-full bg-[#181A1F] border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between text-xs text-slate-300 shrink-0 z-40 shadow-xs">
         
-        {/* Left: Android Studio Branding & Device Selector */}
-        <div className="flex items-center gap-3">
+        {/* Left: Brand Identity & Active Profile */}
+        <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-2">
-            {/* Green Android Icon */}
-            <div className="w-6 h-6 rounded-md bg-[#3DDC84] flex items-center justify-center text-slate-950 font-bold shadow-xs">
-              <span className="text-[11px]">🤖</span>
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-white font-extrabold shadow-sm">
+              <span className="text-xs">⚡</span>
             </div>
-            <span className="font-extrabold text-white text-xs tracking-tight">
-              Android Studio
-            </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-white text-xs tracking-tight">
+                  Happy Pocket
+                </span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  FinLens
+                </span>
+              </div>
+            </div>
           </div>
 
-          <span className="h-3.5 w-px bg-slate-700 hidden sm:inline" />
+          <span className="h-3.5 w-px bg-slate-800 hidden sm:inline" />
 
-          {/* Running Device Tab */}
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#2B2D30] border border-[#3E4249] text-white">
-            <Smartphone className="w-3.5 h-3.5 text-[#3DDC84]" />
-            <span className="font-semibold text-[11px] truncate">
-              Pixel 8 Pro • API 34 (Android 14)
-            </span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          {/* Running Device Indicator */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 text-[11px]">
+            <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-semibold text-[10px]">Pixel 8 Pro</span>
           </div>
-
-          <span className="text-[11px] text-slate-400 font-mono hidden md:inline">
-            Happy Pocket (Debug v2.4)
-          </span>
         </div>
 
-        {/* Right: Live Diagnostics & Emulator Toolbar Buttons */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Right: Atlas Live Diagnostics, Seed Demo & Sync */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Seed Meaningful Sample Data Button */}
+          <button
+            type="button"
+            onClick={handleSeedSampleData}
+            title="Seed 15 Realistic Indian UPI Transactions into MongoDB Atlas"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 active:scale-95 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer"
+          >
+            <Sparkles className="w-3 h-3 text-emerald-400" />
+            <span>Sample Data</span>
+          </button>
+
           {/* MongoDB Atlas Live Badge */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono">
-            <Database className="w-3 h-3 text-emerald-400" />
-            <span className="font-bold hidden sm:inline">Atlas DB:</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-[10px] font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-bold hidden sm:inline">Atlas:</span>
             <span>{dbCount > 0 ? `${dbCount} Txs` : 'Connected'}</span>
           </div>
 
-          {/* Hot Reload / Refresh */}
+          {/* Sync DB */}
           <button
             type="button"
             onClick={loadFromDb}
-            title="Hot Reload Data from Atlas"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#2B2D30] hover:bg-[#35383E] text-slate-200 transition cursor-pointer border border-[#3E4249]"
+            title="Sync Data from Atlas"
+            className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition cursor-pointer border border-slate-700/60 flex items-center gap-1"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isDbLoading ? 'animate-spin' : ''}`} />
-            <span className="text-[10px] font-bold hidden sm:inline">Sync DB</span>
+            <span className="text-[10px] font-bold hidden md:inline">Sync</span>
           </button>
 
-          {/* Navigation Mode Switcher: 3-Buttons vs Gesture */}
-          <div className="flex items-center bg-[#2B2D30] rounded-md border border-[#3E4249] p-0.5">
+          {/* Navigation Mode Pill */}
+          <div className="hidden md:flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
             <button
               type="button"
               onClick={() => setNavStyle('buttons')}
-              title="Android 3-Button Navigation (Back, Home, Overview)"
+              title="Android 3-Button Navigation"
               className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                navStyle === 'buttons' ? 'bg-[#3E4249] text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                navStyle === 'buttons' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              3-Button
+              3-Btn
             </button>
             <button
               type="button"
               onClick={() => setNavStyle('gesture')}
-              title="Android Gesture Navigation Pill"
+              title="Android Gesture Pill"
               className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                navStyle === 'gesture' ? 'bg-[#3E4249] text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                navStyle === 'gesture' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
               Gesture
             </button>
           </div>
 
-          {/* Quick Power Toggle */}
+          {/* Power Standby */}
           <button
             type="button"
             onClick={() => setIsPoweredOn((prev) => !prev)}
-            title={isPoweredOn ? 'Put Emulator in Standby' : 'Wake Emulator'}
-            className={`p-1.5 rounded-md border transition cursor-pointer ${
+            title={isPoweredOn ? 'Put Display in Standby' : 'Wake Display'}
+            className={`p-1.5 rounded-lg border transition cursor-pointer ${
               isPoweredOn 
-                ? 'bg-[#2B2D30] hover:bg-red-950/60 text-slate-300 hover:text-red-400 border-[#3E4249]' 
+                ? 'bg-slate-800/80 hover:bg-red-950/60 text-slate-300 hover:text-red-400 border-slate-700/60' 
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
             }`}
           >
@@ -849,43 +880,16 @@ export default function HappyPocketApp() {
           </div>
         )}
 
-        {/* Emulator Container (Phone Frame + Floating Side Toolbar) */}
-        <div className="relative flex items-center justify-center gap-4 max-w-full">
+        {/* Device Container (Clean Smartphone Display) */}
+        <div className="relative flex items-center justify-center max-w-full">
           
           {/* -------------------------------------------------------- */}
-          {/* THE SMARTPHONE DEVICE (PIXEL 8 PRO HARDWARE BEZEL) */}
+          {/* THE SMARTPHONE DEVICE (CLEAN SLIM FLAGSHIP BEZEL) */}
           {/* -------------------------------------------------------- */}
-          <div className="relative w-[380px] sm:w-[412px] h-[840px] max-h-[92vh] bg-[#1E2024] rounded-[52px] p-[10px] shadow-[0_0_0_8px_#27292D,0_0_0_10px_#3E4249,0_30px_70px_rgba(0,0,0,0.85)] flex flex-col justify-between transition-all duration-300 border border-slate-700/50">
+          <div className="relative w-[380px] sm:w-[412px] h-[840px] max-h-[92vh] bg-[#1A1C20] rounded-[48px] p-[9px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.08)] flex flex-col justify-between transition-all duration-300">
             
-            {/* Physical Hardware Buttons on Bezel */}
-            {/* Left Volume Rocker */}
-            <div className="absolute -left-[14px] top-32 w-[5px] h-20 bg-[#35383F] rounded-l-md border-l border-y border-[#4B4F58] flex flex-col justify-between py-1 shadow-md">
-              <button
-                type="button"
-                onClick={() => handleVolumeChange(10)}
-                title="Hardware Volume Up"
-                className="w-full h-8 hover:bg-[#4B4F58] cursor-pointer"
-              />
-              <button
-                type="button"
-                onClick={() => handleVolumeChange(-10)}
-                title="Hardware Volume Down"
-                className="w-full h-8 hover:bg-[#4B4F58] cursor-pointer"
-              />
-            </div>
-
-            {/* Right Power Key */}
-            <div className="absolute -right-[14px] top-28 w-[5px] h-14 bg-[#35383F] rounded-r-md border-r border-y border-[#4B4F58] shadow-md">
-              <button
-                type="button"
-                onClick={() => setIsPoweredOn((prev) => !prev)}
-                title="Hardware Power Button"
-                className="w-full h-full hover:bg-[#4B4F58] cursor-pointer"
-              />
-            </div>
-
             {/* Speaker Ear Slit at Top Hardware Bezel */}
-            <div className="w-20 h-1 bg-[#0F1012] rounded-full mx-auto mb-1 shrink-0 shadow-inner" />
+            <div className="w-16 h-1 bg-[#0D0E10] rounded-full mx-auto mb-1 shrink-0 shadow-inner" />
 
             {/* -------------------------------------------------------- */}
             {/* SCREEN DISPLAY GLASS (ANDROID APPLICATION VIEWPORT) */}
@@ -1112,45 +1116,24 @@ export default function HappyPocketApp() {
                           onTransactionsClick={handleTransactionsClick}
                         />
 
-                        {/* Live RBI Account Aggregator Quick Connect Banner */}
-                        <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white shadow-sm border border-emerald-500/30 flex items-center justify-between">
+                        {/* Streamlined RBI Account Aggregator Quick Pill */}
+                        <button
+                          type="button"
+                          onClick={() => setIsAaOpen(true)}
+                          className="w-full py-2 px-3.5 rounded-2xl bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/20 text-white flex items-center justify-between transition cursor-pointer group shadow-xs"
+                        >
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center shrink-0">
-                              <Landmark className="w-4 h-4 text-emerald-400" />
+                            <div className="w-5 h-5 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                              <Landmark className="w-3 h-3" />
                             </div>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-bold text-white">Live RBI Account Aggregator</span>
-                                <span className="px-1.5 py-0.2 text-[9px] font-bold bg-emerald-500/30 text-emerald-300 rounded border border-emerald-400/30">ReBIT</span>
-                              </div>
-                              <p className="text-[10px] text-emerald-200/80">Consent-based live bank statements & real balances</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setIsAaOpen(true)}
-                            className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-[11px] shadow transition cursor-pointer shrink-0"
-                          >
-                            Link Bank
-                          </button>
-                        </div>
-
-                        {/* Quick Atlas Sync Chip */}
-                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200/80 shadow-xs text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] font-bold text-slate-700">
-                              Real-Time Ledger: {transactions.length} records
+                            <span className="text-[11px] font-bold text-emerald-200 group-hover:text-emerald-100 transition-colors">
+                              RBI Account Aggregator • Live Bank Consent
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('expense')}
-                            className="text-[10px] font-bold text-orange-600 hover:underline cursor-pointer"
-                          >
-                            Track Velocity →
-                          </button>
-                        </div>
+                          <span className="text-[10px] font-bold text-emerald-400 group-hover:translate-x-0.5 transition-transform">
+                            Connect →
+                          </span>
+                        </button>
 
                         {/* Recent Transactions List with Theme Badges */}
                         <RecentTransactions
@@ -1211,6 +1194,7 @@ export default function HappyPocketApp() {
                           onShowQR={() => setIsQrOpen(true)} 
                           onLogout={handleLogout}
                           onClearData={handleClearAllData}
+                          onSeedSampleData={handleSeedSampleData}
                         />
                       </div>
                     )}
@@ -1290,6 +1274,7 @@ export default function HappyPocketApp() {
                     onOpenMyQr={() => setIsQrOpen(true)}
                     onRefreshData={loadFromDb}
                     onLogout={handleLogout}
+                    onSeedSampleData={handleSeedSampleData}
                     balance={balance}
                   />
 
@@ -1298,98 +1283,6 @@ export default function HappyPocketApp() {
 
             </div>
           </div>
-
-          {/* -------------------------------------------------------- */}
-          {/* FLOATING ANDROID STUDIO EMULATOR TOOLBAR (SIDE DOCK) */}
-          {/* -------------------------------------------------------- */}
-          <aside 
-            aria-label="Android Studio Controls"
-            className="hidden md:flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-[#26282E] border border-[#3E4249] shadow-xl text-slate-400 self-center"
-          >
-            {/* Power Button */}
-            <button
-              type="button"
-              onClick={() => setIsPoweredOn((prev) => !prev)}
-              title={isPoweredOn ? 'Power Standby' : 'Power On'}
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <Power className="w-4 h-4" />
-            </button>
-
-            {/* Volume Up */}
-            <button
-              type="button"
-              onClick={() => handleVolumeChange(10)}
-              title="Volume Up (+)"
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <Volume2 className="w-4 h-4" />
-            </button>
-
-            {/* Volume Down */}
-            <button
-              type="button"
-              onClick={() => handleVolumeChange(-10)}
-              title="Volume Down (-)"
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <Volume1 className="w-4 h-4" />
-            </button>
-
-            <span className="w-4 h-px bg-slate-700 my-0.5" />
-
-            {/* Take Screenshot */}
-            <button
-              type="button"
-              onClick={handleTakeScreenshot}
-              title="Take Emulator Screenshot"
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <Camera className="w-4 h-4" />
-            </button>
-
-            {/* Restart Process */}
-            <button
-              type="button"
-              onClick={handleRestartApp}
-              title="Restart Application Process"
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
-
-            <span className="w-4 h-px bg-slate-700 my-0.5" />
-
-            {/* Back (◁) */}
-            <button
-              type="button"
-              onClick={handleAndroidBack}
-              title="Back"
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <Undo2 className="w-4 h-4" />
-            </button>
-
-            {/* Home (○) */}
-            <button
-              type="button"
-              onClick={handleAndroidHome}
-              title="Home"
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <Circle className="w-4 h-4" />
-            </button>
-
-            {/* Recents / Menu (▢) */}
-            <button
-              type="button"
-              onClick={handleAndroidRecents}
-              title="Overview / Dropdown Menu"
-              className="p-2 rounded-xl hover:bg-[#35383E] hover:text-white transition cursor-pointer"
-            >
-              <Square className="w-4 h-4" />
-            </button>
-          </aside>
 
         </div>
 

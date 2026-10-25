@@ -37,6 +37,7 @@ interface AndroidDrawerProps {
   onOpenMyQr: () => void;
   onRefreshData: () => void;
   onLogout: () => void;
+  onSeedSampleData?: () => void;
   balance: number;
 }
 
@@ -69,6 +70,7 @@ export default function AndroidDrawer({
   onOpenMyQr,
   onRefreshData,
   onLogout,
+  onSeedSampleData,
   balance,
 }: AndroidDrawerProps) {
   if (!isOpen) return null;
@@ -241,6 +243,18 @@ export default function AndroidDrawer({
             onClose();
           },
         },
+        ...(onSeedSampleData ? [{
+          id: 'seed_sample_data',
+          label: 'Load Sample Data (15 records)',
+          subtext: 'Seed realistic Indian UPI & Banking demo',
+          icon: Sparkles,
+          color: 'text-teal-600 bg-teal-50 border-teal-200',
+          action: () => {
+            onClose();
+            onSeedSampleData();
+          },
+          badge: 'Demo Mode',
+        }] : []),
       ],
     },
   ];

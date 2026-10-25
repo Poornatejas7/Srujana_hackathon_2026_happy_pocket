@@ -2,15 +2,16 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { ShieldCheck, QrCode, Lock, Bell, ChevronRight, HelpCircle, LogOut, Trash2 } from 'lucide-react';
+import { ShieldCheck, QrCode, Lock, Bell, ChevronRight, HelpCircle, LogOut, Trash2, Sparkles } from 'lucide-react';
 
 interface ProfileTabProps {
   onShowQR: () => void;
   onLogout?: () => void;
   onClearData?: () => void;
+  onSeedSampleData?: () => void;
 }
 
-export default function ProfileTab({ onShowQR, onLogout, onClearData }: ProfileTabProps) {
+export default function ProfileTab({ onShowQR, onLogout, onClearData, onSeedSampleData }: ProfileTabProps) {
   return (
     <div className="space-y-4 animate-fadeIn">
       {/* Profile Card */}
@@ -69,6 +70,28 @@ export default function ProfileTab({ onShowQR, onLogout, onClearData }: ProfileT
             </div>
           );
         })}
+
+        {/* Load Meaningful Sample Data */}
+        {onSeedSampleData && (
+          <div
+            onClick={onSeedSampleData}
+            className="flex items-center justify-between p-3 rounded-2xl hover:bg-emerald-50/70 transition cursor-pointer text-emerald-800 group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100/70 group-hover:bg-emerald-200/80 flex items-center justify-center text-emerald-700 transition">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-xs sm:text-sm font-bold text-emerald-900">Load Meaningful Sample Data</h4>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800">15 Records</span>
+                </div>
+                <p className="text-[10px] text-emerald-700">Salary, groceries, UPI bills, avoidable leaks & review items</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-emerald-500 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        )}
 
         {/* Clear Data Option */}
         {onClearData && (
