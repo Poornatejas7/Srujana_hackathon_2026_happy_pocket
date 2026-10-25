@@ -16,10 +16,19 @@ export type Category =
   | 'Subscriptions & Digital'
   | 'Transport & Fuel'
   | 'Healthcare'
+  | 'Education'
+  | 'Investments'
+  | 'Insurance'
+  | 'Loan & EMI'
+  | 'Travel'
+  | 'Entertainment'
   | 'Shopping & Discretionary'
+  | 'Electronics'
+  | 'Personal Care'
   | 'Internal Transfer'
   | 'Reimbursement / Split'
-  | 'Income';
+  | 'Income'
+  | 'Other / Unknown';
 
 export interface RawTransaction {
   id: string;

@@ -24,11 +24,20 @@ export function getCategoryIcon(category: Category): string {
     case 'Dining & Nightlife': return '🍔';
     case 'Transport & Fuel': return '⛽';
     case 'Healthcare': return '💊';
+    case 'Education': return '🎓';
+    case 'Investments': return '📈';
+    case 'Insurance': return '🛡️';
+    case 'Loan & EMI': return '💳';
+    case 'Travel': return '✈️';
+    case 'Entertainment': return '🎟️';
     case 'Shopping & Discretionary': return '🛍️';
+    case 'Electronics': return '💻';
+    case 'Personal Care': return '💄';
     case 'Subscriptions & Digital': return '🎵';
     case 'Internal Transfer': return '🏦';
     case 'Reimbursement / Split': return '🤝';
     case 'Income': return '💰';
+    case 'Other / Unknown': return '❓';
     default: return '🏪';
   }
 }
@@ -40,11 +49,20 @@ export function getCategoryThemeLabel(category: Category): string {
     case 'Dining & Nightlife': return 'Food & Dining Service';
     case 'Transport & Fuel': return 'Transport, Spares & Fuel';
     case 'Healthcare': return 'Medicines & Healthcare Store';
+    case 'Education': return 'Education & Tuition Fees';
+    case 'Investments': return 'Mutual Funds & Stock Investments';
+    case 'Insurance': return 'Life & Health Insurance Premium';
+    case 'Loan & EMI': return 'Loan Repayment & Equated Monthly Installment';
+    case 'Travel': return 'Flights, Trains & Travel Accommodations';
+    case 'Entertainment': return 'Movies, Events & Live Shows';
     case 'Shopping & Discretionary': return 'General Merchandise & Retail';
+    case 'Electronics': return 'Consumer Electronics & Gadgets';
+    case 'Personal Care': return 'Salon, Spa & Personal Grooming';
     case 'Subscriptions & Digital': return 'Digital & Utility Service';
     case 'Internal Transfer': return 'Self-Transfer (Own A/C)';
     case 'Reimbursement / Split': return 'Friend & Family Transfer';
     case 'Income': return 'Salary / Business Inflow';
+    case 'Other / Unknown': return 'Unclassified / Review Needed';
     default: return 'Commercial Merchant Store';
   }
 }
@@ -106,7 +124,7 @@ export const PRESET_MERCHANT_ACCOUNTS: SimulatedAccount[] = [
   { id: 'm_iocl', name: 'Indian Oil Fuel Station', vpa: 'iocl.fuels@sbi', theme: 'Fuel & Petroleum', themeIcon: '⛽', category: 'Transport & Fuel', defaultAmount: 500, accountType: 'Merchant / Business' },
   { id: 'm_apollo', name: 'Apollo Pharmacy', vpa: 'apollo.meds@icici', theme: 'Medicines & Healthcare', themeIcon: '💊', category: 'Healthcare', defaultAmount: 380, accountType: 'Merchant / Business' },
   { id: 'm_citycare_medicals', name: 'City Care Medicals & Pharmacy', vpa: 'citycaremedicals@okhdfcbank', theme: 'Medical Shop & Pharmaceuticals', themeIcon: '💊', category: 'Healthcare', defaultAmount: 420, accountType: 'Merchant / Business' },
-  { id: 'm_xavier_college', name: 'St. Xavier Engineering College', vpa: 'xaviercollege@sbi', theme: 'Education College & Tuition Fees', themeIcon: '🎓', category: 'Subscriptions & Digital', defaultAmount: 3500, accountType: 'Merchant / Business' },
+  { id: 'm_xavier_college', name: 'St. Xavier Engineering College', vpa: 'xaviercollege@sbi', theme: 'Education College & Tuition Fees', themeIcon: '🎓', category: 'Education', defaultAmount: 3500, accountType: 'Merchant / Business' },
   { id: 'm_zara', name: 'Zara Fashion Store', vpa: 'zara.retail@hdfc', theme: 'Clothing & Fashion Apparel', themeIcon: '👗', category: 'Shopping & Discretionary', defaultAmount: 2490, accountType: 'Merchant / Business' },
   { id: 'm_bescom', name: 'BESCOM Electricity Utility', vpa: 'bescom.power@billdesk', theme: 'Electricity & Utility Bills', themeIcon: '⚡', category: 'Housing & Utilities', defaultAmount: 1420, accountType: 'Merchant / Business' },
 ];
@@ -287,7 +305,26 @@ export function inferMerchantTheme(
     };
   }
 
-  // 7. Medicines & Healthcare (e.g. Apollo, Pharmacy, Clinic, Meds)
+  // 7. Insurance Premiums (e.g. LIC, Star Health, HDFC Ergo, Policybazaar)
+  if (
+    upper.includes('INSURANCE') || upper.includes('PREMIUM') || upper.includes('LIC') ||
+    upper.includes('STAR HEALTH') || upper.includes('HDFC LIFE') || upper.includes('HDFC ERGO') ||
+    upper.includes('ICICI PRU') || upper.includes('POLICYBAZAAR') || upper.includes('CARE HEALTH') ||
+    upper.includes('MAX LIFE') || upper.includes('ACKO') || upper.includes('DIGIT')
+  ) {
+    return {
+      theme: 'Life & Health Insurance Premium',
+      themeCategory: 'Insurance',
+      themeIcon: '🛡️',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || 'Insurance Provider',
+      confidence: 'high',
+      confidenceScore: 96,
+      isAmbiguous: false,
+    };
+  }
+
+  // 8. Medicines & Healthcare (e.g. Apollo, Pharmacy, Clinic, Meds)
   if (
     upper.includes('PHARMACY') || upper.includes('PHARMA') || upper.includes('MEDICAL') ||
     upper.includes('MEDICINE') || upper.includes('MEDS') || upper.includes('CLINIC') ||
@@ -307,16 +344,97 @@ export function inferMerchantTheme(
     };
   }
 
-  // 8. Electronics & Tech Gadgets (e.g. Croma, Electronics, Tech, Laptop)
+  // 9. Education & Tuition Fees (e.g. College, University, School, Tuition, Coursera)
   if (
-    upper.includes('CROMA') || upper.includes('ELECTRONIC') || upper.includes('ELECTRONICS') ||
-    upper.includes('GADGET') || upper.includes('MOBILE') || upper.includes('TECH') ||
-    upper.includes('COMPUTER') || upper.includes('LAPTOP') || upper.includes('APPLE') ||
-    upper.includes('SAMSUNG') || upper.includes('HARDWARE') || upper.includes('DEVICE')
+    upper.includes('COLLEGE') || upper.includes('UNIVERSITY') || upper.includes('SCHOOL') ||
+    upper.includes('TUITION') || upper.includes('FEES') || upper.includes('ACADEMY') ||
+    upper.includes('INSTITUTE') || upper.includes('EDUCATION') || upper.includes('COURSERA') ||
+    upper.includes('UDEMY') || upper.includes('EDX') || upper.includes('UNACADEMY') ||
+    upper.includes('BYJU') || upper.includes('XAVIER')
   ) {
     return {
-      theme: 'Electronics & Tech Gadgets',
-      themeCategory: 'Shopping & Discretionary',
+      theme: 'Education & Tuition Fees',
+      themeCategory: 'Education',
+      themeIcon: '🎓',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || 'Educational Institution / College',
+      confidence: 'high',
+      confidenceScore: 96,
+      isAmbiguous: false,
+    };
+  }
+
+  // 10. Mutual Funds, Stocks & Investments (e.g. Zerodha, Groww, Upstox, Mutual Funds)
+  if (
+    upper.includes('ZERODHA') || upper.includes('GROWW') || upper.includes('UPSTOX') ||
+    upper.includes('MUTUAL FUND') || upper.includes('SIP') || upper.includes('COIN') ||
+    upper.includes('ANGELONE') || upper.includes('SHAREKHAN') || upper.includes('MOTILAL') ||
+    upper.includes('INDMONEY') || upper.includes('KFINTECH') || upper.includes('CAMS') ||
+    upper.includes('SECURITIES') || upper.includes('NPS') || upper.includes('PPF')
+  ) {
+    return {
+      theme: 'Mutual Funds & Stock Investments',
+      themeCategory: 'Investments',
+      themeIcon: '📈',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || 'Investment / Brokerage Account',
+      confidence: 'high',
+      confidenceScore: 97,
+      isAmbiguous: false,
+    };
+  }
+
+  // 11. Loan Repayment & EMI (e.g. Bajaj Finserv, Kreditbee, Cred, Loan)
+  if (
+    upper.includes('EMI') || upper.includes('LOAN') || upper.includes('BAJAJ FINANCE') ||
+    upper.includes('BAJAJ FINSERV') || upper.includes('CREDIT CARD') || upper.includes('CRED') ||
+    upper.includes('KREDITBEE') || upper.includes('HOME LOAN') || upper.includes('CAR LOAN') ||
+    upper.includes('FINANCE') || upper.includes('MUTHOOT') || upper.includes('MANAPPURAM')
+  ) {
+    return {
+      theme: 'Loan Repayment & Equated Monthly Installment',
+      themeCategory: 'Loan & EMI',
+      themeIcon: '💳',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || 'Loan / Financial Institution',
+      confidence: 'high',
+      confidenceScore: 96,
+      isAmbiguous: false,
+    };
+  }
+
+  // 12. Travel, Commute & Bookings (e.g. IRCTC, MakeMyTrip, IndiGo, Uber, Ola)
+  if (
+    upper.includes('IRCTC') || upper.includes('RAILWAY') || upper.includes('MAKEMYTRIP') ||
+    upper.includes('MMT') || upper.includes('INDIGO') || upper.includes('AIR INDIA') ||
+    upper.includes('SPICEJET') || upper.includes('VISTARA') || upper.includes('UBER') ||
+    upper.includes('OLA') || upper.includes('RAPIDO') || upper.includes('REDBUS') ||
+    upper.includes('ABHIBUS') || upper.includes('METRO') || upper.includes('TOLL') ||
+    upper.includes('FASTAG') || upper.includes('AIRPORT') || upper.includes('OYO')
+  ) {
+    return {
+      theme: 'Flights, Trains & Travel Accommodations',
+      themeCategory: 'Travel',
+      themeIcon: '✈️',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || 'Travel & Commute Booking',
+      confidence: 'high',
+      confidenceScore: 95,
+      isAmbiguous: false,
+    };
+  }
+
+  // 13. Electronics & Tech Gadgets (e.g. Croma, Reliance Digital, Apple, Samsung)
+  if (
+    upper.includes('CROMA') || upper.includes('RELIANCE DIGITAL') || upper.includes('VIJAY SALES') ||
+    upper.includes('ELECTRONIC') || upper.includes('ELECTRONICS') || upper.includes('GADGET') ||
+    upper.includes('MOBILE') || upper.includes('TECH') || upper.includes('COMPUTER') ||
+    upper.includes('LAPTOP') || upper.includes('APPLE STORE') || upper.includes('SAMSUNG STORE') ||
+    upper.includes('BOAT') || upper.includes('ONEPLUS')
+  ) {
+    return {
+      theme: 'Consumer Electronics & Gadgets',
+      themeCategory: 'Electronics',
       themeIcon: '💻',
       accountType: 'Merchant / Business',
       cleanName: cleanInput || 'Croma Electronics',
@@ -326,16 +444,37 @@ export function inferMerchantTheme(
     };
   }
 
-  // 9. Cinema & Event Entertainment (e.g. BookMyShow, Movie, Cinema)
+  // 14. Salon, Spa & Personal Grooming (e.g. Salon, Spa, Beauty, Parlour, Haircut)
+  if (
+    upper.includes('SALON') || upper.includes('SPA') || upper.includes('BEAUTY') ||
+    upper.includes('PARLOUR') || upper.includes('HAIRCUT') || upper.includes('URBAN COMPANY') ||
+    upper.includes('NATURALS') || upper.includes('GEETANJALI') || upper.includes('GROOMING') ||
+    upper.includes('COSMETICS')
+  ) {
+    return {
+      theme: 'Salon, Spa & Personal Grooming',
+      themeCategory: 'Personal Care',
+      themeIcon: '💄',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || 'Personal Care & Salon',
+      confidence: 'high',
+      confidenceScore: 94,
+      isAmbiguous: false,
+    };
+  }
+
+  // 15. Cinema & Event Entertainment (e.g. BookMyShow, Movie, Cinema, PVR)
   if (
     upper.includes('BOOKMYSHOW') || upper.includes('CINEMA') || upper.includes('MOVIE') ||
     upper.includes('THEATRE') || upper.includes('FILM') || upper.includes('MULTIPLEX') ||
-    upper.includes('PVR') || upper.includes('INOX') || upper.includes('SHOW') || upper.includes('TICKET')
+    upper.includes('PVR') || upper.includes('INOX') || upper.includes('DISNEY') ||
+    upper.includes('HOTSTAR') || upper.includes('SONYLIV') || upper.includes('ZEE5') ||
+    upper.includes('GAMING') || upper.includes('STEAM') || upper.includes('PLAYSTATION')
   ) {
     return {
-      theme: 'Cinema & Event Tickets',
-      themeCategory: 'Subscriptions & Digital',
-      themeIcon: '🎬',
+      theme: 'Movies, Events & Live Shows',
+      themeCategory: 'Entertainment',
+      themeIcon: '🎟️',
       accountType: 'Merchant / Business',
       cleanName: cleanInput || 'BookMyShow Entertainment',
       confidence: 'high',
@@ -344,7 +483,7 @@ export function inferMerchantTheme(
     };
   }
 
-  // 10. Electricity & Utility Bills (e.g. BESCOM, Power, Electricity)
+  // 16. Electricity & Utility Bills (e.g. BESCOM, Power, Electricity)
   if (
     upper.includes('BESCOM') || upper.includes('ELECTRICITY') || upper.includes('ELECTRIC') ||
     upper.includes('POWER') || upper.includes('UTILITY') || upper.includes('WATER') ||
@@ -363,7 +502,7 @@ export function inferMerchantTheme(
     };
   }
 
-  // 11. Sports & Fitness Gear (e.g. Decathlon, Gym, Sport)
+  // 17. Sports & Fitness Gear (e.g. Decathlon, Gym, Sport)
   if (
     upper.includes('DECATHLON') || upper.includes('SPORT') || upper.includes('SPORTS') ||
     upper.includes('GYM') || upper.includes('FITNESS') || upper.includes('YOGA') ||
@@ -381,24 +520,25 @@ export function inferMerchantTheme(
     };
   }
 
-  // 12. E-Commerce Platforms (Amazon, Flipkart, Meesho)
+  // 18. E-Commerce Marketplaces (Amazon, Flipkart, Meesho)
+  // Master prompt rule: "Do not classify every payment to Amazon as electronics or every payment to a shopping platform as a particular product type."
   if (
     upper.includes('AMAZON') || upper.includes('FLIPKART') || upper.includes('MEESHO') ||
-    upper.includes('MYNTRA') || upper.includes('AJIO') || upper.includes('NYKAA')
+    upper.includes('AJIO') || upper.includes('NYKAA')
   ) {
     return {
-      theme: 'E-Commerce & Online Retail',
+      theme: 'E-Commerce & Online Marketplace',
       themeCategory: 'Shopping & Discretionary',
       themeIcon: '📦',
       accountType: 'Merchant / Business',
-      cleanName: cleanInput || 'Amazon India Store',
-      confidence: 'high',
-      confidenceScore: 96,
+      cleanName: cleanInput || 'E-Commerce Marketplace',
+      confidence: 'medium',
+      confidenceScore: 82,
       isAmbiguous: false,
     };
   }
 
-  // 13. AMBIGUOUS INDIAN TRADERS & ENTERPRISES (e.g. Lakshmi Traders, Hanuman Enterprises, Balaji Agencies)
+  // 19. AMBIGUOUS INDIAN TRADERS & ENTERPRISES (e.g. Lakshmi Traders, Hanuman Enterprises, Balaji Agencies)
   // These are generic commercial business names without clear single industry keywords
   const tradeSuffixMatch = upper.match(/\b(TRADERS|TRADER|ENTERPRISES|ENTERPRISE|AGENCIES|AGENCY|SUPPLIERS|DISTRIBUTORS|DISTRIBUTOR|ASSOCIATES|VENTURES|VENTURE|COMMERCIAL|BHANDAR|EMPORIUM)\b/);
   if (tradeSuffixMatch) {
@@ -411,7 +551,9 @@ export function inferMerchantTheme(
       'Dining & Nightlife',
       'Transport & Fuel',
       'Healthcare',
-      'Reimbursement / Split'
+      'Education',
+      'Personal Care',
+      'Other / Unknown'
     ];
 
     return {
@@ -429,22 +571,55 @@ export function inferMerchantTheme(
     };
   }
 
-  // Fallback: Check commercial gateway signatures
+  // Fallback: Check commercial gateway signatures vs generic unknown
   const isCommercial = /\b(PVT LTD|LIMITED|LTD|CORP|INC|STORE|STORES|MART|RETAIL|SHOP|SERVICES|SOLUTIONS|PAY|BILL|POS|QR)\b/i.test(upper) ||
     (vpaHandle && (vpaHandle.includes('.bd') || vpaHandle.includes('@yesb') || vpaHandle.includes('@okbizaxis') || vpaHandle.includes('@bharatpe')));
 
+  if (isCommercial) {
+    return {
+      theme: 'Commercial Merchant Store',
+      themeCategory: 'Other / Unknown',
+      themeIcon: '🏪',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || 'Merchant Store',
+      confidence: 'low',
+      confidenceScore: 46,
+      isAmbiguous: true,
+      needsReview: true,
+      ambiguityReason: 'Commercial vendor detected without established product category evidence.',
+      suggestedCategories: [
+        'Groceries',
+        'Dining & Nightlife',
+        'Shopping & Discretionary',
+        'Housing & Utilities',
+        'Transport & Fuel',
+        'Healthcare',
+        'Personal Care',
+        'Other / Unknown'
+      ],
+    };
+  }
+
+  // Unknown peer or unclassified transfer
   return {
-    theme: isCommercial ? 'Commercial Merchant Store' : 'Personal / Peer Transfer',
-    themeCategory: isCommercial ? 'Shopping & Discretionary' : 'Reimbursement / Split',
-    themeIcon: isCommercial ? '🛍️' : '👤',
-    accountType: isCommercial ? 'Merchant / Business' : 'Personal',
-    cleanName: cleanInput || (isCommercial ? 'Merchant Store' : 'Personal Contact'),
-    confidence: isCommercial ? 'medium' : 'high',
-    confidenceScore: isCommercial ? 58 : 88,
-    isAmbiguous: !!isCommercial,
-    needsReview: !!isCommercial,
-    ambiguityReason: isCommercial ? 'General merchant store without specific category indication.' : undefined,
-    suggestedCategories: isCommercial ? ['Groceries', 'Housing & Utilities', 'Shopping & Discretionary', 'Dining & Nightlife'] : undefined,
+    theme: 'Unclassified Entity (Review Needed)',
+    themeCategory: 'Other / Unknown',
+    themeIcon: '❓',
+    accountType: 'Personal',
+    cleanName: cleanInput || 'Unknown Contact',
+    confidence: 'low',
+    confidenceScore: 40,
+    isAmbiguous: true,
+    needsReview: true,
+    ambiguityReason: 'Insufficient transaction evidence to reliably determine spending category.',
+    suggestedCategories: [
+      'Reimbursement / Split',
+      'Internal Transfer',
+      'Shopping & Discretionary',
+      'Dining & Nightlife',
+      'Groceries',
+      'Other / Unknown'
+    ]
   };
 }
 
@@ -625,7 +800,9 @@ export function extractUPIEntity(raw: string, payeeName?: string, vpaHandle?: st
     theme: themeInfo.theme,
     themeIcon: themeInfo.themeIcon,
     category: themeInfo.themeCategory,
-    tier: themeInfo.accountType === 'Merchant / Business' ? 'Discretionary' : 'Transfer_or_Offset',
+    tier: themeInfo.accountType === 'Personal' 
+      ? 'Transfer_or_Offset' 
+      : (['Housing & Utilities', 'Groceries', 'Healthcare', 'Education', 'Insurance', 'Transport & Fuel'].includes(themeInfo.themeCategory) ? 'Essential' : 'Discretionary'),
     isSelfTransfer: false,
     isRecurring: false,
     isRefund: false,

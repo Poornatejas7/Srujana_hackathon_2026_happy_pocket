@@ -309,6 +309,11 @@ export default function RecommenderCard({
         </span>
       </div>
 
+      {/* Statutory Regulatory & Market Risk Disclaimer */}
+      <p className="mt-3 text-[10px] text-slate-400 leading-relaxed text-center">
+        ℹ️ <strong>Disclaimer:</strong> Projections are illustrative simulations based on historical benchmark compound rates (12–14% CAGR) and are not guaranteed returns. Mutual fund investments are subject to market risks. Insurance premiums are indicative estimates subject to underwriting guidelines.
+      </p>
+
     </div>
   );
 }

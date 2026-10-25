@@ -43,12 +43,18 @@ export default function StatementUploadModal({
     subscriptions: number;
     merchantCount: number;
     personalCount: number;
+    duplicatesSkipped?: number;
     savedToMongo: boolean;
   } | null>(null);
 
   if (!isOpen) return null;
 
-  const processExtractedRawTxs = (rawTxs: RawTransaction[], merchantCountOverride?: number, personalCountOverride?: number) => {
+  const processExtractedRawTxs = (
+    rawTxs: RawTransaction[], 
+    merchantCountOverride?: number, 
+    personalCountOverride?: number,
+    duplicatesSkipped = 0
+  ) => {
     const analysis = enrichAndAnalyzeTransactions(rawTxs);
     const converted: DisplayTransaction[] = analysis.enriched.map((item, idx) => ({
       id: item.id || `stmt_tx_${Date.now()}_${idx}`,
@@ -71,13 +77,14 @@ export default function StatementUploadModal({
       subscriptions: analysis.subscriptions.length,
       merchantCount: merchantCountOverride ?? analysis.kpis.merchantCount,
       personalCount: personalCountOverride ?? analysis.kpis.personalCount,
+      duplicatesSkipped,
       savedToMongo: true,
     });
 
     onImportTransactions(converted, rawTxs);
   };
 
-  const submitPdfFile = async (targetFile: File, pwd?: string) => {
+  const submitStatementFile = async (targetFile: File, pwd?: string) => {
     setIsProcessing(true);
     setErrorMessage(null);
 
@@ -106,19 +113,24 @@ export default function StatementUploadModal({
       }
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to parse the bank statement PDF.');
+        throw new Error(data.error || 'Failed to parse the bank statement file.');
       }
 
       if (!data.transactions || data.transactions.length === 0) {
-        throw new Error('No debit/credit transaction entries found in this PDF.');
+        throw new Error('No debit/credit transaction entries found in this statement.');
       }
 
       setIsPasswordRequired(false);
       setPassword('');
       setPendingFile(null);
-      processExtractedRawTxs(data.transactions, data.merchantCount, data.personalCount);
+      processExtractedRawTxs(
+        data.transactions, 
+        data.merchantCount, 
+        data.personalCount,
+        data.duplicatesSkipped || 0
+      );
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to parse the bank statement PDF.');
+      setErrorMessage(err.message || 'Failed to parse the bank statement file.');
     } finally {
       setIsProcessing(false);
     }
@@ -127,17 +139,18 @@ export default function StatementUploadModal({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
-    if (!selected.name.toLowerCase().endsWith('.pdf')) {
-      setErrorMessage('Please select a valid PDF file.');
+    const name = selected.name.toLowerCase();
+    if (!name.endsWith('.pdf') && !name.endsWith('.csv')) {
+      setErrorMessage('Please select a valid PDF or CSV bank statement file.');
     } else {
-      submitPdfFile(selected);
+      submitStatementFile(selected);
     }
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingFile || !password) return;
-    submitPdfFile(pendingFile, password);
+    submitStatementFile(pendingFile, password);
   };
 
   const handleLoadDemo = async () => {
@@ -295,6 +308,12 @@ export default function StatementUploadModal({
                 <span>Live in MongoDB Atlas: happypocket.transactions</span>
               </div>
 
+              {(summary.duplicatesSkipped || 0) > 0 && (
+                <div className="text-[11px] font-medium text-amber-700 bg-amber-50 rounded-lg py-1 px-2 border border-amber-200">
+                  🛡️ {summary.duplicatesSkipped} duplicate transactions prevented
+                </div>
+              )}
+
               <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-slate-600 space-y-0.5">
                 <p>Noise Excluded: ₹{summary.noiseFiltered.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                 <p className="font-bold text-slate-800">True Living Spend: ₹{summary.trueLiving.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
@@ -314,20 +333,20 @@ export default function StatementUploadModal({
             <div className="border-2 border-dashed border-slate-200 hover:border-orange-400 rounded-3xl p-6 text-center transition bg-slate-50 relative group cursor-pointer">
               <input
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.csv,text/csv"
                 onChange={handleFileChange}
                 disabled={isProcessing}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
               />
               <UploadCloud className="w-10 h-10 text-orange-500 mx-auto mb-2 group-hover:scale-110 transition-transform duration-200" />
               <h4 className="text-xs font-bold text-slate-800">
-                Drag & drop your bank statement PDF
+                Drag & drop your bank statement PDF or CSV
               </h4>
               <p className="text-[11px] text-slate-400 mt-1">
                 Supports SBI, HDFC, ICICI, Axis, Canara & all Indian Banks
               </p>
               <div className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-sm">
-                Browse PDF File
+                Browse PDF or CSV
               </div>
             </div>
 

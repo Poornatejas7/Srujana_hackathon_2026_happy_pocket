@@ -622,6 +622,8 @@ export function calculateOverviewMetrics(
           t.category === 'Housing & Utilities' ||
           t.category === 'Groceries' ||
           t.category === 'Healthcare' ||
+          t.category === 'Education' ||
+          t.category === 'Insurance' ||
           t.category === 'Transport & Fuel';
 
         if (isEssential) {
