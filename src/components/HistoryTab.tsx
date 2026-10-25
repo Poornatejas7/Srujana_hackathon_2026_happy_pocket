@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Filter, ArrowDownLeft, ArrowUpRight, FileUp, Store, User, Database } from 'lucide-react';
+import { Search, Filter, ArrowDownLeft, ArrowUpRight, FileUp, Store, User, Database, AlertTriangle, Tag } from 'lucide-react';
 import { DisplayTransaction } from './RecentTransactions';
 
 interface HistoryTabProps {
   transactions: DisplayTransaction[];
   onOpenUpload: () => void;
+  onClassifyMerchant?: (merchantName: string, currentCategory?: string) => void;
 }
 
-export default function HistoryTab({ transactions, onOpenUpload }: HistoryTabProps) {
+export default function HistoryTab({ transactions, onOpenUpload, onClassifyMerchant }: HistoryTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'merchant' | 'personal' | 'outflow' | 'inflow'>('all');
 
@@ -139,6 +140,34 @@ export default function HistoryTab({ transactions, onOpenUpload }: HistoryTabPro
                         >
                           {tx.accountType === 'Merchant / Business' ? 'Merchant' : 'Personal'}
                         </span>
+                      )}
+
+                      {/* Ambiguity / Needs Category confirmation button */}
+                      {(tx.needsReview || tx.isAmbiguous || /TRADER|ENTERPRISE/i.test(tx.title)) && !tx.userOverridden ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onClassifyMerchant?.(tx.title, tx.category);
+                          }}
+                          className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 transition active:scale-95 cursor-pointer shadow-2xs"
+                          title="Click to tell Happy Pocket which category this store belongs to"
+                        >
+                          <AlertTriangle className="w-2.5 h-2.5 text-amber-700 shrink-0" />
+                          <span>Confirm Category</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onClassifyMerchant?.(tx.title, tx.category);
+                          }}
+                          className="text-[9px] font-medium px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                          title="Change Category"
+                        >
+                          Edit
+                        </button>
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">

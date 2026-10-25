@@ -50,6 +50,18 @@ function cleanAndCategorizeTx(t: any) {
   if (!doc.direction) {
     doc.direction = (doc.amount && doc.amount > 0) ? 'CREDIT' : 'DEBIT';
   }
+  if (doc.isAmbiguous === undefined) {
+    doc.isAmbiguous = classification.isAmbiguous || false;
+  }
+  if (doc.needsReview === undefined) {
+    doc.needsReview = classification.needsReview || false;
+  }
+  if (doc.confidenceScore === undefined) {
+    doc.confidenceScore = classification.confidenceScore ? Math.round(classification.confidenceScore * 100) : 85;
+  }
+  if (doc.userOverridden === undefined) {
+    doc.userOverridden = false;
+  }
 
   return doc;
 }

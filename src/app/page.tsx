@@ -45,8 +45,9 @@ import AuthScreen from '@/components/AuthScreen';
 import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
 import AndroidDrawer from '@/components/AndroidDrawer';
-import { RawTransaction } from '@/types/finance';
-import { enrichAndAnalyzeTransactions } from '@/lib/engine';
+import CategoryClassifierModal from '@/components/CategoryClassifierModal';
+import { RawTransaction, Category } from '@/types/finance';
+import { enrichAndAnalyzeTransactions, getCategoryIcon, getCategoryThemeLabel, saveUserMerchantOverride } from '@/lib/engine';
 
 export default function HappyPocketApp() {
   const [balance, setBalance] = useState<number>(14524.91);
@@ -66,6 +67,14 @@ export default function HappyPocketApp() {
   const [isSendOpen, setIsSendOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
+  const [classifierModalState, setClassifierModalState] = useState<{
+    isOpen: boolean;
+    merchantName: string;
+    currentCategory?: string;
+  }>({
+    isOpen: false,
+    merchantName: '',
+  });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Android Studio Emulator State
@@ -159,6 +168,11 @@ export default function HappyPocketApp() {
           isInternalTransfer: t.isInternalTransfer || false,
           isReimbursementOffset: t.isReimbursementOffset || false,
           isRecurringAutoPay: t.isRecurringAutoPay || false,
+          isAmbiguous: t.isAmbiguous || false,
+          needsReview: t.needsReview || false,
+          confidenceScore: t.confidenceScore || 85,
+          userOverridden: t.userOverridden || false,
+          category: t.category,
         }));
 
         setExtractedRawTxs(rawList);
@@ -181,6 +195,10 @@ export default function HappyPocketApp() {
           vpaHandle: item.vpaHandle,
           payeeName: item.payeeName,
           category: item.category,
+          isAmbiguous: item.isAmbiguous,
+          needsReview: item.needsReview,
+          confidenceScore: item.confidenceScore,
+          userOverridden: item.userOverridden,
         }));
 
         if (converted.length > 0) {
@@ -324,6 +342,94 @@ export default function HappyPocketApp() {
   const handleScanPay = () => setIsScanOpen(true);
   const handleSendMoney = () => setIsSendOpen(true);
   const handleTransactionsClick = () => setActiveTab('history');
+
+  const handleOpenClassifier = (merchantName: string, currentCategory?: string) => {
+    setClassifierModalState({
+      isOpen: true,
+      merchantName,
+      currentCategory,
+    });
+  };
+
+  const handleSaveCategoryOverride = async (newCategory: Category, rememberForFuture: boolean) => {
+    const targetMerchant = classifierModalState.merchantName;
+    if (!targetMerchant) return;
+
+    if (rememberForFuture) {
+      saveUserMerchantOverride(targetMerchant, newCategory);
+    }
+
+    const newTheme = getCategoryThemeLabel(newCategory);
+    const newIcon = getCategoryIcon(newCategory);
+
+    // 1. Update in MongoDB Atlas
+    try {
+      const matchingTxs = transactions.filter(
+        t => t.title.toLowerCase().includes(targetMerchant.toLowerCase()) || 
+             (t.payeeName && t.payeeName.toLowerCase().includes(targetMerchant.toLowerCase()))
+      );
+
+      for (const tx of matchingTxs) {
+        await fetch('/api/transactions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: tx.id,
+            category: newCategory,
+            theme: newTheme,
+            themeIcon: newIcon,
+            isAmbiguous: false,
+            needsReview: false,
+            confidenceScore: 100,
+            userOverridden: true,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update transactions in DB:', err);
+    }
+
+    // 2. Update local transactions state
+    setTransactions(prev => prev.map(t => {
+      const match = t.title.toLowerCase().includes(targetMerchant.toLowerCase()) || 
+                    (t.payeeName && t.payeeName.toLowerCase().includes(targetMerchant.toLowerCase()));
+      if (!match) return t;
+      return {
+        ...t,
+        category: newCategory,
+        theme: newTheme,
+        themeIcon: newIcon,
+        isAmbiguous: false,
+        needsReview: false,
+        userOverridden: true,
+        confidenceScore: 100,
+      };
+    }));
+
+    // 3. Update raw and re-run enrichment engine
+    setExtractedRawTxs(prev => {
+      const updated = prev.map(t => {
+        const match = (t.payeeName && t.payeeName.toLowerCase().includes(targetMerchant.toLowerCase())) ||
+                      t.rawDescription.toLowerCase().includes(targetMerchant.toLowerCase());
+        if (!match) return t;
+        return {
+          ...t,
+          category: newCategory,
+          theme: newTheme,
+          themeIcon: newIcon,
+          isAmbiguous: false,
+          needsReview: false,
+          userOverridden: true,
+          confidenceScore: 100,
+        };
+      });
+      const analyzed = enrichAndAnalyzeTransactions(updated);
+      setAnalysisResult(analyzed);
+      return updated;
+    });
+
+    showToast(`"${targetMerchant}" categorized as ${newCategory}!`);
+  };
 
   // Android System Navigation Buttons handler
   const handleAndroidBack = () => {
@@ -731,6 +837,7 @@ export default function HappyPocketApp() {
                           transactions={transactions} 
                           rawTransactions={extractedRawTxs} 
                           onNavigateToAdvisor={() => setActiveTab('insights')}
+                          onClassifyMerchant={handleOpenClassifier}
                         />
                       </div>
                     )}
@@ -758,6 +865,7 @@ export default function HappyPocketApp() {
                         <HistoryTab
                           transactions={transactions}
                           onOpenUpload={() => setIsUploadOpen(true)}
+                          onClassifyMerchant={handleOpenClassifier}
                         />
                       </div>
                     )}
@@ -974,6 +1082,14 @@ export default function HappyPocketApp() {
       <MyQrModal
         isOpen={isQrOpen}
         onClose={() => setIsQrOpen(false)}
+      />
+
+      <CategoryClassifierModal
+        isOpen={classifierModalState.isOpen}
+        onClose={() => setClassifierModalState(prev => ({ ...prev, isOpen: false }))}
+        merchantName={classifierModalState.merchantName}
+        currentCategory={classifierModalState.currentCategory}
+        onSaveCategory={handleSaveCategoryOverride}
       />
 
     </div>

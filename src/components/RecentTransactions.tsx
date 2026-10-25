@@ -16,6 +16,10 @@ export interface DisplayTransaction {
   themeIcon?: string;
   vpaHandle?: string;
   payeeName?: string;
+  isAmbiguous?: boolean;
+  needsReview?: boolean;
+  userOverridden?: boolean;
+  confidenceScore?: number;
 }
 
 export const DEFAULT_RECENT_TRANSACTIONS: DisplayTransaction[] = [

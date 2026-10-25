@@ -44,6 +44,11 @@ export interface RawTransaction {
   isInternalTransfer?: boolean;
   isReimbursementOffset?: boolean;
   isRecurringAutoPay?: boolean;
+  category?: Category | string;
+  isAmbiguous?: boolean;     // True for generic merchants like Lakshmi Traders, Hanuman Enterprises
+  needsReview?: boolean;     // Needs user category confirmation
+  confidenceScore?: number;  // 0-100
+  userOverridden?: boolean;  // True if user customized the category
 }
 
 export interface EnrichedTransaction extends RawTransaction {
@@ -64,6 +69,8 @@ export interface EnrichedTransaction extends RawTransaction {
   confidenceScore: number;
   anomalyWarning?: string;
   userOverridden?: boolean;
+  isAmbiguous?: boolean;
+  needsReview?: boolean;
 }
 
 export interface SubscriptionItem {

@@ -45,6 +45,7 @@ interface ExpenseTrackerTabProps {
   transactions?: DisplayTransaction[];
   rawTransactions?: RawTransaction[];
   onNavigateToAdvisor?: () => void;
+  onClassifyMerchant?: (merchantName: string, currentCategory?: string) => void;
 }
 
 interface TransferItem {
@@ -269,7 +270,8 @@ function DynamicDonutChart({ slices }: { slices: { percent: number; color: strin
 export default function ExpenseTrackerTab({
   transactions = [],
   rawTransactions = [],
-  onNavigateToAdvisor
+  onNavigateToAdvisor,
+  onClassifyMerchant,
 }: ExpenseTrackerTabProps) {
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [expandedMerchantName, setExpandedMerchantName] = useState<string | null>(null);
@@ -568,6 +570,14 @@ export default function ExpenseTrackerTab({
     setExpandedMerchantName(prev => (prev === merchantName ? null : merchantName));
   };
 
+  // Check for ambiguous recipients (e.g. Lakshmi Traders, Hanuman Enterprises)
+  const ambiguousRecipients = useMemo(() => {
+    return allRecipientAccounts.filter(r => 
+      /TRADER|ENTERPRISE|AGENC|BHANDAR/i.test(r.name) || 
+      r.transfers.some(t => (t as any).isAmbiguous || (t as any).needsReview)
+    );
+  }, [allRecipientAccounts]);
+
   return (
     <div className="w-full space-y-4 select-none animate-fadeIn">
       
@@ -595,6 +605,44 @@ export default function ExpenseTrackerTab({
           <span>{showAllRecipientsView ? 'Category View' : 'All Accounts Breakdown'}</span>
         </button>
       </div>
+
+      {/* 1.5. AMBIGUOUS MERCHANTS CATEGORY CONFIRMATION BANNER (e.g. Lakshmi Traders, Hanuman Enterprises) */}
+      {ambiguousRecipients.length > 0 && (
+        <div className="p-3.5 rounded-[22px] bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-950 shadow-xs space-y-2 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+              </div>
+              <h4 className="text-xs font-extrabold text-amber-950">
+                Confirm Store Categories ({ambiguousRecipients.length})
+              </h4>
+            </div>
+            <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+              Category Needed
+            </span>
+          </div>
+
+          <p className="text-[11px] text-amber-800/90 leading-relaxed">
+            Stores with generic commercial names like <strong>{ambiguousRecipients.map(r => r.name).join(', ')}</strong> can sell groceries, hardware, or general items. Tap below to tell Happy Pocket the exact category:
+          </p>
+
+          <div className="flex items-center gap-2 flex-wrap pt-0.5">
+            {ambiguousRecipients.map(r => (
+              <button
+                key={r.name}
+                type="button"
+                onClick={() => onClassifyMerchant?.(r.name, r.category)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+              >
+                <span>🏪 {r.name}</span>
+                <span className="text-[10px] text-amber-700 font-normal">({r.category})</span>
+                <Tag className="w-3 h-3 text-orange-500 ml-0.5" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 2. REAL-WORLD FINANCE: TRUE LIVING EXPENDITURE VS GROSS OUTFLOW */}
       <div className="bg-white rounded-[28px] p-5 shadow-[0_4px_24px_rgba(15,23,42,0.05)] border border-slate-100 flex items-center justify-between gap-3">

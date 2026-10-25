@@ -6,6 +6,78 @@ export interface MerchantThemeInference {
   themeIcon: string;
   accountType: 'Merchant / Business' | 'Personal';
   cleanName: string;
+  confidence: 'high' | 'medium' | 'low';
+  confidenceScore: number;
+  isAmbiguous: boolean;
+  needsReview?: boolean;
+  ambiguityReason?: string;
+  suggestedCategories?: Category[];
+  userOverridden?: boolean;
+}
+
+export const USER_MERCHANT_OVERRIDES_KEY = 'hp_merchant_category_overrides';
+
+export function getCategoryIcon(category: Category): string {
+  switch (category) {
+    case 'Groceries': return '🥦';
+    case 'Housing & Utilities': return '🏠';
+    case 'Dining & Nightlife': return '🍔';
+    case 'Transport & Fuel': return '⛽';
+    case 'Healthcare': return '💊';
+    case 'Shopping & Discretionary': return '🛍️';
+    case 'Subscriptions & Digital': return '🎵';
+    case 'Internal Transfer': return '🏦';
+    case 'Reimbursement / Split': return '🤝';
+    case 'Income': return '💰';
+    default: return '🏪';
+  }
+}
+
+export function getCategoryThemeLabel(category: Category): string {
+  switch (category) {
+    case 'Groceries': return 'Groceries & Kirana Store';
+    case 'Housing & Utilities': return 'Hardware, Electricals & Utilities';
+    case 'Dining & Nightlife': return 'Food & Dining Service';
+    case 'Transport & Fuel': return 'Transport, Spares & Fuel';
+    case 'Healthcare': return 'Medicines & Healthcare Store';
+    case 'Shopping & Discretionary': return 'General Merchandise & Retail';
+    case 'Subscriptions & Digital': return 'Digital & Utility Service';
+    case 'Internal Transfer': return 'Self-Transfer (Own A/C)';
+    case 'Reimbursement / Split': return 'Friend & Family Transfer';
+    case 'Income': return 'Salary / Business Inflow';
+    default: return 'Commercial Merchant Store';
+  }
+}
+
+export function getUserMerchantOverrides(): Record<string, { category: Category; theme: string; themeIcon: string }> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(USER_MERCHANT_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveUserMerchantOverride(
+  merchantName: string, 
+  category: Category, 
+  theme?: string, 
+  themeIcon?: string
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const cleanKey = merchantName.trim().toLowerCase();
+    const current = getUserMerchantOverrides();
+    current[cleanKey] = {
+      category,
+      theme: theme || getCategoryThemeLabel(category),
+      themeIcon: themeIcon || getCategoryIcon(category)
+    };
+    localStorage.setItem(USER_MERCHANT_OVERRIDES_KEY, JSON.stringify(current));
+  } catch (err) {
+    console.error('Failed to save merchant override:', err);
+  }
 }
 
 export interface SimulatedAccount {
@@ -57,7 +129,27 @@ export function inferMerchantTheme(
   inputNameOrRaw: string,
   vpaHandle?: string
 ): MerchantThemeInference {
-  const upper = (inputNameOrRaw + ' ' + (vpaHandle || '')).toUpperCase();
+  const cleanInput = (inputNameOrRaw || '').trim();
+  const cleanKey = cleanInput.toLowerCase();
+
+  // 0. Check User Overrides First (Instant 100% Confidence)
+  const overrides = getUserMerchantOverrides();
+  if (overrides[cleanKey]) {
+    const saved = overrides[cleanKey];
+    return {
+      theme: saved.theme,
+      themeCategory: saved.category,
+      themeIcon: saved.themeIcon,
+      accountType: saved.category === 'Internal Transfer' || saved.category === 'Reimbursement / Split' ? 'Personal' : 'Merchant / Business',
+      cleanName: cleanInput,
+      confidence: 'high',
+      confidenceScore: 100,
+      isAmbiguous: false,
+      userOverridden: true,
+    };
+  }
+
+  const upper = (cleanInput + ' ' + (vpaHandle || '')).toUpperCase();
 
   // 1. Personal / Self / Peer Checks
   if (
@@ -70,6 +162,9 @@ export function inferMerchantTheme(
       themeIcon: '🏦',
       accountType: 'Personal',
       cleanName: 'Self-Transfer (Kotresh C - Canara Bank / Own A/C)',
+      confidence: 'high',
+      confidenceScore: 99,
+      isAmbiguous: false,
     };
   }
 
@@ -83,7 +178,10 @@ export function inferMerchantTheme(
       themeCategory: 'Reimbursement / Split',
       themeIcon: '👤',
       accountType: 'Personal',
-      cleanName: inputNameOrRaw.trim() || 'Personal Contact',
+      cleanName: cleanInput || 'Personal Contact',
+      confidence: 'high',
+      confidenceScore: 96,
+      isAmbiguous: false,
     };
   }
 
@@ -98,7 +196,10 @@ export function inferMerchantTheme(
       themeCategory: 'Subscriptions & Digital',
       themeIcon: '🎵',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Spotify India',
+      cleanName: cleanInput || 'Spotify India',
+      confidence: 'high',
+      confidenceScore: 95,
+      isAmbiguous: false,
     };
   }
 
@@ -116,7 +217,10 @@ export function inferMerchantTheme(
       themeCategory: 'Shopping & Discretionary',
       themeIcon: '👗',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Zara Fashion Store',
+      cleanName: cleanInput || 'Zara Fashion Store',
+      confidence: 'high',
+      confidenceScore: 95,
+      isAmbiguous: false,
     };
   }
 
@@ -133,7 +237,10 @@ export function inferMerchantTheme(
       themeCategory: 'Groceries',
       themeIcon: '🥦',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Blinkit Quick Commerce',
+      cleanName: cleanInput || 'Blinkit Quick Commerce',
+      confidence: 'high',
+      confidenceScore: 94,
+      isAmbiguous: false,
     };
   }
 
@@ -152,7 +259,10 @@ export function inferMerchantTheme(
       themeCategory: 'Dining & Nightlife',
       themeIcon: '🍔',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Swiggy Food Delivery',
+      cleanName: cleanInput || 'Swiggy Food Delivery',
+      confidence: 'high',
+      confidenceScore: 95,
+      isAmbiguous: false,
     };
   }
 
@@ -168,7 +278,10 @@ export function inferMerchantTheme(
       themeCategory: 'Transport & Fuel',
       themeIcon: '⛽',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Indian Oil Fuel Station',
+      cleanName: cleanInput || 'Indian Oil Fuel Station',
+      confidence: 'high',
+      confidenceScore: 97,
+      isAmbiguous: false,
     };
   }
 
@@ -185,7 +298,10 @@ export function inferMerchantTheme(
       themeCategory: 'Healthcare',
       themeIcon: '💊',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Apollo Pharmacy',
+      cleanName: cleanInput || 'Apollo Pharmacy',
+      confidence: 'high',
+      confidenceScore: 95,
+      isAmbiguous: false,
     };
   }
 
@@ -201,7 +317,10 @@ export function inferMerchantTheme(
       themeCategory: 'Shopping & Discretionary',
       themeIcon: '💻',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Croma Electronics',
+      cleanName: cleanInput || 'Croma Electronics',
+      confidence: 'high',
+      confidenceScore: 93,
+      isAmbiguous: false,
     };
   }
 
@@ -216,7 +335,10 @@ export function inferMerchantTheme(
       themeCategory: 'Subscriptions & Digital',
       themeIcon: '🎬',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'BookMyShow Entertainment',
+      cleanName: cleanInput || 'BookMyShow Entertainment',
+      confidence: 'high',
+      confidenceScore: 95,
+      isAmbiguous: false,
     };
   }
 
@@ -232,7 +354,10 @@ export function inferMerchantTheme(
       themeCategory: 'Housing & Utilities',
       themeIcon: '⚡',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'BESCOM Electricity Utility',
+      cleanName: cleanInput || 'BESCOM Electricity Utility',
+      confidence: 'high',
+      confidenceScore: 97,
+      isAmbiguous: false,
     };
   }
 
@@ -247,35 +372,77 @@ export function inferMerchantTheme(
       themeCategory: 'Shopping & Discretionary',
       themeIcon: '🏃',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Decathlon Sports Gear',
+      cleanName: cleanInput || 'Decathlon Sports Gear',
+      confidence: 'high',
+      confidenceScore: 94,
+      isAmbiguous: false,
     };
   }
 
-  // 12. E-Commerce & Retail Shopping (e.g. Amazon, Flipkart, Meesho)
+  // 12. E-Commerce Platforms (Amazon, Flipkart, Meesho)
   if (
     upper.includes('AMAZON') || upper.includes('FLIPKART') || upper.includes('MEESHO') ||
-    upper.includes('STORE') || upper.includes('RETAIL') || upper.includes('SHOP') ||
-    upper.includes('TRADERS') || upper.includes('ENTERPRISE')
+    upper.includes('MYNTRA') || upper.includes('AJIO') || upper.includes('NYKAA')
   ) {
     return {
-      theme: 'E-Commerce & Retail Shopping',
+      theme: 'E-Commerce & Online Retail',
       themeCategory: 'Shopping & Discretionary',
       themeIcon: '📦',
       accountType: 'Merchant / Business',
-      cleanName: inputNameOrRaw.trim() || 'Amazon India Store',
+      cleanName: cleanInput || 'Amazon India Store',
+      confidence: 'high',
+      confidenceScore: 96,
+      isAmbiguous: false,
+    };
+  }
+
+  // 13. AMBIGUOUS INDIAN TRADERS & ENTERPRISES (e.g. Lakshmi Traders, Hanuman Enterprises, Balaji Agencies)
+  // These are generic commercial business names without clear single industry keywords
+  const tradeSuffixMatch = upper.match(/\b(TRADERS|TRADER|ENTERPRISES|ENTERPRISE|AGENCIES|AGENCY|SUPPLIERS|DISTRIBUTORS|DISTRIBUTOR|ASSOCIATES|VENTURES|VENTURE|COMMERCIAL|BHANDAR|EMPORIUM)\b/);
+  if (tradeSuffixMatch) {
+    const keyword = tradeSuffixMatch[0];
+    const isTrader = /TRADER|BHANDAR/i.test(keyword);
+    const suggestedCategories: Category[] = [
+      'Groceries',
+      'Housing & Utilities',
+      'Shopping & Discretionary',
+      'Dining & Nightlife',
+      'Transport & Fuel',
+      'Healthcare',
+      'Reimbursement / Split'
+    ];
+
+    return {
+      theme: `Commercial ${keyword} (Review Needed)`,
+      themeCategory: isTrader ? 'Groceries' : 'Housing & Utilities',
+      themeIcon: isTrader ? '🥦' : '🏠',
+      accountType: 'Merchant / Business',
+      cleanName: cleanInput || `${keyword} Store`,
+      confidence: 'low',
+      confidenceScore: 48,
+      isAmbiguous: true,
+      needsReview: true,
+      ambiguityReason: `Generic business keyword "${keyword}" detected. Stores like "${cleanInput}" can belong to Groceries, Hardware/Utilities, or Retail Shopping.`,
+      suggestedCategories,
     };
   }
 
   // Fallback: Check commercial gateway signatures
-  const isCommercial = /\b(PVT LTD|LIMITED|LTD|CORP|INC|ENTERPRISES|TRADERS|STORE|STORES|MART|RETAIL|SHOP|SERVICES|SOLUTIONS|PAY|BILL|POS|QR)\b/i.test(upper) ||
+  const isCommercial = /\b(PVT LTD|LIMITED|LTD|CORP|INC|STORE|STORES|MART|RETAIL|SHOP|SERVICES|SOLUTIONS|PAY|BILL|POS|QR)\b/i.test(upper) ||
     (vpaHandle && (vpaHandle.includes('.bd') || vpaHandle.includes('@yesb') || vpaHandle.includes('@okbizaxis') || vpaHandle.includes('@bharatpe')));
 
   return {
     theme: isCommercial ? 'Commercial Merchant Store' : 'Personal / Peer Transfer',
-    themeCategory: 'Shopping & Discretionary',
+    themeCategory: isCommercial ? 'Shopping & Discretionary' : 'Reimbursement / Split',
     themeIcon: isCommercial ? '🛍️' : '👤',
     accountType: isCommercial ? 'Merchant / Business' : 'Personal',
-    cleanName: inputNameOrRaw.trim() || (isCommercial ? 'Merchant Store' : 'Personal Contact'),
+    cleanName: cleanInput || (isCommercial ? 'Merchant Store' : 'Personal Contact'),
+    confidence: isCommercial ? 'medium' : 'high',
+    confidenceScore: isCommercial ? 58 : 88,
+    isAmbiguous: !!isCommercial,
+    needsReview: !!isCommercial,
+    ambiguityReason: isCommercial ? 'General merchant store without specific category indication.' : undefined,
+    suggestedCategories: isCommercial ? ['Groceries', 'Housing & Utilities', 'Shopping & Discretionary', 'Dining & Nightlife'] : undefined,
   };
 }
 
@@ -293,6 +460,11 @@ export function extractUPIEntity(raw: string, payeeName?: string, vpaHandle?: st
   isRecurring: boolean;
   isRefund: boolean;
   confidenceScore: number;
+  isAmbiguous?: boolean;
+  needsReview?: boolean;
+  ambiguityReason?: string;
+  suggestedCategories?: Category[];
+  userOverridden?: boolean;
 } {
   const upper = (raw + ' ' + (payeeName || '') + ' ' + (vpaHandle || '')).toUpperCase();
   const themeInfo = inferMerchantTheme(payeeName || raw, vpaHandle);
@@ -455,7 +627,12 @@ export function extractUPIEntity(raw: string, payeeName?: string, vpaHandle?: st
     isSelfTransfer: false,
     isRecurring: false,
     isRefund: false,
-    confidenceScore: 0.88
+    confidenceScore: themeInfo.confidenceScore / 100,
+    isAmbiguous: themeInfo.isAmbiguous,
+    needsReview: !!themeInfo.needsReview,
+    ambiguityReason: themeInfo.ambiguityReason,
+    suggestedCategories: themeInfo.suggestedCategories,
+    userOverridden: themeInfo.userOverridden
   };
 }
 
@@ -489,8 +666,8 @@ export function enrichAndAnalyzeTransactions(
   // Step 1: Process each transaction with UPI engine and classify Merchant vs Personal
   const enriched: EnrichedTransaction[] = rawTxs.map(tx => {
     const info = extractUPIEntity(tx.rawDescription, tx.payeeName, tx.vpaHandle);
-    let category = info.category;
-    let tier = info.tier;
+    let category = tx.category ? (tx.category as Category) : info.category;
+    let tier = tx.category ? (tx.category === 'Internal Transfer' || tx.category === 'Reimbursement / Split' ? 'Transfer_or_Offset' : 'Discretionary') : info.tier;
     let confidenceScore = info.confidenceScore;
 
     if (tx.amount > 0 && tier !== 'Income' && !info.isSelfTransfer) {
@@ -504,10 +681,14 @@ export function enrichAndAnalyzeTransactions(
       confidenceScore = 1.0;
     }
 
+    const userOverridden = !!userOverrides[tx.id] || !!tx.userOverridden || !!info.userOverridden;
+    const isAmbiguous = userOverridden ? false : (tx.isAmbiguous !== undefined ? tx.isAmbiguous : info.isAmbiguous);
+    const needsReview = userOverridden ? false : (tx.needsReview !== undefined ? tx.needsReview : info.needsReview);
+
     return {
       ...tx,
-      cleanMerchant: info.cleanName,
-      accountType: info.accountType,
+      cleanMerchant: tx.payeeName || info.cleanName,
+      accountType: tx.accountType || info.accountType,
       theme: tx.theme || info.theme,
       themeIcon: tx.themeIcon || info.themeIcon,
       category,
@@ -517,8 +698,10 @@ export function enrichAndAnalyzeTransactions(
       isRefundOrReversal: info.isRefund,
       isSharedSplitExpense: false,
       netOutflowAmount: tx.amount < 0 ? Math.abs(tx.amount) : 0,
-      confidenceScore,
-      userOverridden: !!userOverrides[tx.id]
+      confidenceScore: userOverridden ? 1.0 : (tx.confidenceScore ? tx.confidenceScore / 100 : confidenceScore),
+      userOverridden,
+      isAmbiguous,
+      needsReview,
     };
   });
 

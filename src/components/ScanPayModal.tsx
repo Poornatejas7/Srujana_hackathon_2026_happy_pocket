@@ -12,10 +12,19 @@ import {
   Database,
   ArrowRight,
   Zap,
-  Tag
+  Tag,
+  AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { PRESET_MERCHANT_ACCOUNTS, inferMerchantTheme, SimulatedAccount } from '@/lib/engine';
+import { 
+  PRESET_MERCHANT_ACCOUNTS, 
+  inferMerchantTheme, 
+  SimulatedAccount, 
+  getCategoryIcon, 
+  getCategoryThemeLabel, 
+  saveUserMerchantOverride 
+} from '@/lib/engine';
+import { Category } from '@/types/finance';
 
 interface ScanPayModalProps {
   isOpen: boolean;
@@ -30,6 +39,7 @@ export default function ScanPayModal({
 }: ScanPayModalProps) {
   const [selectedMerchant, setSelectedMerchant] = useState<SimulatedAccount | null>(PRESET_MERCHANT_ACCOUNTS[0]); // default Spotify
   const [customQrInput, setCustomQrInput] = useState<string>('');
+  const [userSelectedCategory, setUserSelectedCategory] = useState<Category | null>(null);
   const [amount, setAmount] = useState<string>('119.00');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -46,25 +56,37 @@ export default function ScanPayModal({
   // Current active merchant details (either custom scanned or preset selected)
   const activeMerchantInfo = useMemo(() => {
     if (customQrInput.trim() && dynamicInference) {
+      const chosenCat = userSelectedCategory || dynamicInference.themeCategory;
+      const chosenTheme = userSelectedCategory ? getCategoryThemeLabel(userSelectedCategory) : dynamicInference.theme;
+      const chosenIcon = userSelectedCategory ? getCategoryIcon(userSelectedCategory) : dynamicInference.themeIcon;
+
       return {
         id: 'm_custom',
         name: dynamicInference.cleanName || customQrInput.trim(),
         vpa: `${customQrInput.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-        theme: dynamicInference.theme,
-        themeIcon: dynamicInference.themeIcon,
-        category: dynamicInference.themeCategory,
+        theme: chosenTheme,
+        themeIcon: chosenIcon,
+        category: chosenCat,
         accountType: dynamicInference.accountType,
         isCustom: true,
+        isAmbiguous: userSelectedCategory ? false : dynamicInference.isAmbiguous,
+        needsReview: userSelectedCategory ? false : dynamicInference.needsReview,
+        confidenceScore: userSelectedCategory ? 100 : dynamicInference.confidenceScore,
+        ambiguityReason: dynamicInference.ambiguityReason,
+        userOverridden: !!userSelectedCategory || !!dynamicInference.userOverridden,
       };
     }
     if (selectedMerchant) {
       return {
         ...selectedMerchant,
         isCustom: false,
+        isAmbiguous: false,
+        needsReview: false,
+        confidenceScore: 98,
       };
     }
     return null;
-  }, [customQrInput, dynamicInference, selectedMerchant]);
+  }, [customQrInput, dynamicInference, selectedMerchant, userSelectedCategory]);
 
   if (!isOpen) return null;
 
@@ -113,6 +135,10 @@ export default function ScanPayModal({
       isRecurring: false,
       isInternalTransfer: false,
       isRefundOrReversal: false,
+      isAmbiguous: (activeMerchantInfo as any).isAmbiguous || false,
+      needsReview: (activeMerchantInfo as any).needsReview || false,
+      confidenceScore: (activeMerchantInfo as any).confidenceScore || 85,
+      userOverridden: (activeMerchantInfo as any).userOverridden || false,
       txMode: 'UPI',
       upiRrn: generatedRrn,
       vpaHandle: activeMerchantInfo.vpa,
@@ -266,6 +292,59 @@ export default function ScanPayModal({
                     <div className="mt-2 pt-2 border-t border-slate-700/50 flex items-center gap-1.5 text-[10px] text-amber-300">
                       <Sparkles className="w-3 h-3 shrink-0" />
                       <span>Zero-Knowledge AI Classified: Inferred theme &quot;{activeMerchantInfo.theme}&quot; for unknown merchant!</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* AMBIGUOUS MERCHANT CONFIRMATION CARD (For stores like Lakshmi Traders, Hanuman Enterprises) */}
+              {activeMerchantInfo && (activeMerchantInfo.isAmbiguous || (dynamicInference && dynamicInference.isAmbiguous)) && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2 animate-fadeIn">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-extrabold text-xs text-white block">
+                        Confused Store Name: &ldquo;{activeMerchantInfo.name}&rdquo;
+                      </span>
+                      <span className="text-[10px] text-amber-300/90 block mt-0.5">
+                        {activeMerchantInfo.ambiguityReason || 'General trade keywords (Traders / Enterprises). What does this store sell?'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Selectable category chips */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    {[
+                      { id: 'Groceries' as Category, label: 'Groceries & Kirana', icon: '🥦' },
+                      { id: 'Housing & Utilities' as Category, label: 'Hardware & Supplies', icon: '🏠' },
+                      { id: 'Shopping & Discretionary' as Category, label: 'Retail & Shopping', icon: '🛍️' },
+                      { id: 'Dining & Nightlife' as Category, label: 'Food, Dining & Sweets', icon: '🍔' },
+                      { id: 'Transport & Fuel' as Category, label: 'Fuel & Spares', icon: '⛽' },
+                      { id: 'Healthcare' as Category, label: 'Pharmacy & Meds', icon: '💊' },
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setUserSelectedCategory(cat.id);
+                          saveUserMerchantOverride(activeMerchantInfo.name, cat.id);
+                        }}
+                        className={`flex items-center gap-1.5 p-2 rounded-xl text-left border text-xs font-semibold transition cursor-pointer ${
+                          userSelectedCategory === cat.id
+                            ? 'bg-orange-500 text-white border-orange-400 shadow-xs ring-1 ring-orange-400'
+                            : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700'
+                        }`}
+                      >
+                        <span className="text-sm shrink-0">{cat.icon}</span>
+                        <span className="text-[11px] truncate">{cat.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {userSelectedCategory && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold pt-0.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Categorized as {userSelectedCategory} & remembered for future payments!</span>
                     </div>
                   )}
                 </div>

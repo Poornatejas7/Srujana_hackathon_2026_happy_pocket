@@ -24,6 +24,9 @@ export interface ITransactionDocument extends Document {
   isRefundOrReversal?: boolean;
   netOutflowAmount?: number;
   userOverridden?: boolean;
+  isAmbiguous?: boolean;
+  needsReview?: boolean;
+  confidenceScore?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +65,9 @@ const TransactionSchema: Schema = new Schema(
     isRefundOrReversal: { type: Boolean, default: false },
     netOutflowAmount: { type: Number },
     userOverridden: { type: Boolean, default: false },
+    isAmbiguous: { type: Boolean, default: false, index: true },
+    needsReview: { type: Boolean, default: false, index: true },
+    confidenceScore: { type: Number, default: 85 },
   },
   {
     timestamps: true,
