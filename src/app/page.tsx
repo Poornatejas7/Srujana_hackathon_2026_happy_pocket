@@ -25,8 +25,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Maximize2,
-  Landmark,
-  Monitor
+  Landmark
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -52,7 +51,6 @@ import MyQrModal from '@/components/MyQrModal';
 import AndroidDrawer from '@/components/AndroidDrawer';
 import CategoryClassifierModal from '@/components/CategoryClassifierModal';
 import EditTransactionModal from '@/components/EditTransactionModal';
-import WebViewDashboard from '@/components/WebViewDashboard';
 import { RawTransaction, Category } from '@/types/finance';
 import { enrichAndAnalyzeTransactions, getCategoryIcon, getCategoryThemeLabel, saveUserMerchantOverride } from '@/lib/engine';
 
@@ -89,9 +87,6 @@ export default function HappyPocketApp() {
   const [editingTransaction, setEditingTransaction] = useState<DisplayTransaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // View Mode: Mobile Phone Emulator (Pixel 8 Pro) vs Clean Desktop Web Dashboard
-  const [viewMode, setViewMode] = useState<'phone' | 'web'>('phone');
 
   // Android Studio Emulator State
   const [isPoweredOn, setIsPoweredOn] = useState(true);
@@ -159,19 +154,8 @@ export default function HappyPocketApp() {
       if (savedRole && (savedRole === 'personal' || savedRole === 'medical' || savedRole === 'college')) {
         setCurrentUserRole(savedRole);
       }
-      const savedMode = localStorage.getItem('hp_view_mode') as 'phone' | 'web';
-      if (savedMode === 'phone' || savedMode === 'web') {
-        setViewMode(savedMode);
-      }
     }
   }, []);
-
-  const handleSwitchViewMode = (mode: 'phone' | 'web') => {
-    setViewMode(mode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hp_view_mode', mode);
-    }
-  };
 
   // Fetch real data from MongoDB Atlas
   const loadFromDb = async () => {
@@ -389,34 +373,6 @@ export default function HappyPocketApp() {
 
     const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '🏷️'} ${cat}]` : '';
     showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}${themeMsg} • Settled via UPI!`);
-  };
-
-  // Instant 1-Click Pay Simulator for Web & Phone views
-  const handleQuickSimulatePay = async (preset: any) => {
-    try {
-      const res = await fetch('/api/upi/pay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          payeeName: preset.name,
-          payeeVpa: preset.vpa,
-          amount: preset.defaultAmount,
-          note: `Instant Payment for ${preset.theme}`,
-          category: preset.category,
-          theme: preset.theme,
-          themeIcon: preset.themeIcon,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        handlePaymentSuccess(preset.defaultAmount, preset.name, data.transaction, data.payerBalance);
-        setDbCount((prev) => prev + 1);
-      } else {
-        showToast(data.error || 'Payment failed');
-      }
-    } catch (err) {
-      console.error('Quick payment error:', err);
-    }
   };
 
   // Send Money Handler
@@ -798,34 +754,8 @@ export default function HappyPocketApp() {
             <span className="text-[10px] font-bold hidden sm:inline">Sync DB</span>
           </button>
 
-          {/* View Mode Toggle: Mobile Phone Emulator vs Clean Full Web UI */}
-          <div className="flex items-center bg-[#2B2D30] rounded-md border border-[#3E4249] p-0.5">
-            <button
-              type="button"
-              onClick={() => handleSwitchViewMode('phone')}
-              title="Mobile Phone View (Pixel 8 Pro Emulator)"
-              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                viewMode === 'phone' ? 'bg-[#FF8A00] text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Smartphone className="w-3 h-3" />
-              <span>Phone UI</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSwitchViewMode('web')}
-              title="Clean Desktop Web Dashboard View"
-              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                viewMode === 'web' ? 'bg-[#FF8A00] text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Monitor className="w-3 h-3" />
-              <span>Web UI</span>
-            </button>
-          </div>
-
           {/* Navigation Mode Switcher: 3-Buttons vs Gesture */}
-          <div className="hidden sm:flex items-center bg-[#2B2D30] rounded-md border border-[#3E4249] p-0.5">
+          <div className="flex items-center bg-[#2B2D30] rounded-md border border-[#3E4249] p-0.5">
             <button
               type="button"
               onClick={() => setNavStyle('buttons')}
@@ -866,32 +796,8 @@ export default function HappyPocketApp() {
       </header>
 
       {/* ======================================================== */}
-      {/* 2. APPLICATION WORKSPACE: WEB UI OR PHONE EMULATOR       */}
+      {/* 2. EMULATOR WORKSPACE CANVAS (Android Studio Viewport) */}
       {/* ======================================================== */}
-      {viewMode === 'web' ? (
-        <WebViewDashboard
-          transactions={transactions}
-          rawTransactions={extractedRawTxs}
-          balance={balance}
-          primaryAccount={primaryAccount}
-          activeTab={activeTab}
-          onChangeTab={(t) => setActiveTab(t)}
-          onScanClick={handleScanPay}
-          onSendClick={handleSendMoney}
-          onUploadClick={() => setIsUploadOpen(true)}
-          onAaClick={() => setIsAaOpen(true)}
-          onRefresh={loadFromDb}
-          isDbLoading={isDbLoading}
-          dbCount={dbCount}
-          onEditTransaction={handleOpenEditTransaction}
-          onClassifyMerchant={handleOpenClassifier}
-          currentUserRole={currentUserRole}
-          onSwitchAccount={() => setIsSwitcherOpen(true)}
-          onLogout={handleLogout}
-          onClearData={handleClearAllData}
-          onQuickSimulatePay={handleQuickSimulatePay}
-        />
-      ) : (
       <main className="flex-1 w-full bg-[radial-gradient(#26282E_1px,transparent_1px)] [background-size:20px_20px] flex items-center justify-center p-2 sm:p-6 overflow-y-auto relative">
         
         {/* Floating Toast Notification inside Emulator view */}
@@ -1447,7 +1353,6 @@ export default function HappyPocketApp() {
         </div>
 
       </main>
-      )}
 
       {/* ======================================================== */}
       {/* 3. INTERACTIVE MODALS (SCAN & PAY, SEND, STATEMENT, QR) */}
