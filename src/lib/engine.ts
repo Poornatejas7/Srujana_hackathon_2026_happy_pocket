@@ -95,18 +95,18 @@ export interface SimulatedAccount {
  * 12 Curated Indian Merchant Accounts representing diverse spending themes
  */
 export const PRESET_MERCHANT_ACCOUNTS: SimulatedAccount[] = [
-  { id: 'm_spotify', name: 'Spotify India', vpa: 'spotify@icici', theme: 'Music & Audio Streaming', themeIcon: '🎵', category: 'Subscriptions & Digital', defaultAmount: 119, accountType: 'Merchant / Business' },
-  { id: 'm_zara', name: 'Zara Fashion Store', vpa: 'zara.retail@hdfc', theme: 'Clothing & Fashion Apparel', themeIcon: '👗', category: 'Shopping & Discretionary', defaultAmount: 2490, accountType: 'Merchant / Business' },
+  { id: 'm_amazon', name: 'Amazon India Marketplace', vpa: 'amazonpay@apl', theme: 'E-Commerce & Retail Shopping', themeIcon: '📦', category: 'Shopping & Discretionary', defaultAmount: 850, accountType: 'Merchant / Business' },
+  { id: 'm_iyengar_bakery', name: 'Iyengar Bakery & Sweets', vpa: 'iyengarbakery@paytm', theme: 'Bakery & Fresh Confectionery', themeIcon: '🥖', category: 'Dining & Nightlife', defaultAmount: 180, accountType: 'Merchant / Business' },
+  { id: 'm_lakshmi_kirana', name: 'Sri Lakshmi Kirana Stores', vpa: 'lakshmikirana@upi', theme: 'Groceries & Daily Essentials', themeIcon: '🥦', category: 'Groceries', defaultAmount: 480, accountType: 'Merchant / Business' },
+  { id: 'm_chai_point', name: 'Chai Point & Snacks', vpa: 'chaipoint@axl', theme: 'Tea Stall & Quick Snacks', themeIcon: '☕', category: 'Dining & Nightlife', defaultAmount: 40, accountType: 'Merchant / Business' },
+  { id: 'm_hanuman_hardware', name: 'Sri Hanuman Hardware', vpa: 'hanumanhardware@upi', theme: 'Hardware, Paints & Electricals', themeIcon: '🔧', category: 'Housing & Utilities', defaultAmount: 750, accountType: 'Merchant / Business' },
   { id: 'm_blinkit', name: 'Blinkit Quick Commerce', vpa: 'blinkit.fresh@icici', theme: 'Groceries & Daily Essentials', themeIcon: '🥦', category: 'Groceries', defaultAmount: 480, accountType: 'Merchant / Business' },
   { id: 'm_swiggy', name: 'Swiggy Food Delivery', vpa: 'swiggy.orders@icici', theme: 'Food & Dining Delivery', themeIcon: '🍔', category: 'Dining & Nightlife', defaultAmount: 350, accountType: 'Merchant / Business' },
-  { id: 'm_zomato', name: 'Zomato Dining & Bistro', vpa: 'zomato.pay@hdfc', theme: 'Food & Dining Delivery', themeIcon: '🍕', category: 'Dining & Nightlife', defaultAmount: 620, accountType: 'Merchant / Business' },
+  { id: 'm_spotify', name: 'Spotify India', vpa: 'spotify@icici', theme: 'Music & Audio Streaming', themeIcon: '🎵', category: 'Subscriptions & Digital', defaultAmount: 119, accountType: 'Merchant / Business' },
   { id: 'm_iocl', name: 'Indian Oil Fuel Station', vpa: 'iocl.fuels@sbi', theme: 'Fuel & Petroleum', themeIcon: '⛽', category: 'Transport & Fuel', defaultAmount: 500, accountType: 'Merchant / Business' },
   { id: 'm_apollo', name: 'Apollo Pharmacy', vpa: 'apollo.meds@icici', theme: 'Medicines & Healthcare', themeIcon: '💊', category: 'Healthcare', defaultAmount: 380, accountType: 'Merchant / Business' },
-  { id: 'm_amazon', name: 'Amazon India Store', vpa: 'amazonpay@apl', theme: 'E-Commerce & Retail Shopping', themeIcon: '📦', category: 'Shopping & Discretionary', defaultAmount: 1450, accountType: 'Merchant / Business' },
-  { id: 'm_croma', name: 'Croma Electronics', vpa: 'croma.tech@tatapay', theme: 'Electronics & Tech Gadgets', themeIcon: '💻', category: 'Shopping & Discretionary', defaultAmount: 2200, accountType: 'Merchant / Business' },
-  { id: 'm_bookmyshow', name: 'BookMyShow Entertainment', vpa: 'bookmyshow@kotak', theme: 'Cinema & Event Tickets', themeIcon: '🎬', category: 'Subscriptions & Digital', defaultAmount: 550, accountType: 'Merchant / Business' },
+  { id: 'm_zara', name: 'Zara Fashion Store', vpa: 'zara.retail@hdfc', theme: 'Clothing & Fashion Apparel', themeIcon: '👗', category: 'Shopping & Discretionary', defaultAmount: 2490, accountType: 'Merchant / Business' },
   { id: 'm_bescom', name: 'BESCOM Electricity Utility', vpa: 'bescom.power@billdesk', theme: 'Electricity & Utility Bills', themeIcon: '⚡', category: 'Housing & Utilities', defaultAmount: 1420, accountType: 'Merchant / Business' },
-  { id: 'm_decathlon', name: 'Decathlon Sports Gear', vpa: 'decathlon.gear@axisbank', theme: 'Sports & Fitness Equipment', themeIcon: '🏃', category: 'Shopping & Discretionary', defaultAmount: 999, accountType: 'Merchant / Business' },
 ];
 
 /**

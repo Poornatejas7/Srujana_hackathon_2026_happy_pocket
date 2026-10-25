@@ -1,23 +1,40 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Landmark, Eye, EyeOff } from 'lucide-react';
+import { Landmark, Eye, EyeOff, RefreshCw, ShieldCheck } from 'lucide-react';
 
 interface AccountCardProps {
+  bankName?: string;
   accountName?: string;
   accountNumberMask?: string;
+  upiId?: string;
   balance?: number;
   className?: string;
   onRefresh?: () => void;
 }
 
 export default function AccountCard({
+  bankName = 'HDFC Bank',
   accountName = 'Savings Account',
-  accountNumberMask = '•••• 5274',
-  balance = 14524.91,
+  accountNumberMask = '•••• 7482',
+  upiId = 'poornatejas@okhdfcbank',
+  balance = 10000.00,
   className = '',
+  onRefresh,
 }: AccountCardProps) {
   const [showBalance, setShowBalance] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshClick = async () => {
+    if (onRefresh) {
+      setIsRefreshing(true);
+      try {
+        await onRefresh();
+      } finally {
+        setTimeout(() => setIsRefreshing(false), 500);
+      }
+    }
+  };
 
   return (
     <div
@@ -52,54 +69,82 @@ export default function AccountCard({
       </div>
 
       {/* Card Content */}
-      <div className="relative z-10 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
-        {/* Top Row: Bank Info & Visibility Eye */}
+      <div className="relative z-10 flex flex-col justify-between min-h-[130px] sm:min-h-[145px]">
+        {/* Top Row: Bank Info & Controls */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 text-white shadow-inner">
+            <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-white shadow-inner">
               <Landmark className="w-5 h-5 stroke-[2.2]" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-bold tracking-tight text-white leading-tight">
-                {accountName}
-              </h2>
-              <p className="text-[11px] sm:text-xs text-slate-300 font-medium tracking-wider mt-0.5">
-                A/c No. {accountNumberMask}
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm sm:text-base font-bold tracking-tight text-white leading-tight">
+                  {bankName}
+                </h2>
+                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.2 rounded-full">
+                  UPI Linked
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 font-medium tracking-wider mt-0.5">
+                {accountName} • A/c {accountNumberMask}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowBalance(!showBalance)}
-            className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400/50"
-            aria-label={showBalance ? "Hide balance" : "Show balance"}
-            title={showBalance ? "Hide balance" : "Show balance"}
-          >
-            {showBalance ? (
-              <Eye className="w-5 h-5 stroke-[2]" />
-            ) : (
-              <EyeOff className="w-5 h-5 stroke-[2]" />
+          <div className="flex items-center gap-1">
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={handleRefreshClick}
+                className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Refresh Bank Balance"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-orange-400' : ''}`} />
+              </button>
             )}
-          </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBalance(!showBalance)}
+              className="p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400/50"
+              aria-label={showBalance ? "Hide balance" : "Show balance"}
+              title={showBalance ? "Hide balance" : "Show balance"}
+            >
+              {showBalance ? (
+                <Eye className="w-5 h-5 stroke-[2]" />
+              ) : (
+                <EyeOff className="w-5 h-5 stroke-[2]" />
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Bottom Row: Amount */}
-        <div className="mt-5 sm:mt-6">
-          <div className="text-2xl sm:text-3xl md:text-[34px] font-extrabold tracking-tight font-sans text-white select-none drop-shadow-sm flex items-center">
-            {showBalance ? (
-              <>
-                <span className="font-semibold mr-0.5">₹</span>
-                {balance.toLocaleString('en-IN', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </>
-            ) : (
-              <span className="tracking-[0.25em] text-xl sm:text-2xl text-slate-200">
-                ₹••••••••
-              </span>
-            )}
+        {/* Bottom Row: Amount & UPI ID */}
+        <div className="mt-4 sm:mt-5 flex items-end justify-between">
+          <div>
+            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
+              Available Balance
+            </div>
+            <div className="text-2xl sm:text-3xl md:text-[34px] font-extrabold tracking-tight font-sans text-white select-none drop-shadow-sm flex items-center">
+              {showBalance ? (
+                <>
+                  <span className="font-semibold mr-0.5">₹</span>
+                  {balance.toLocaleString('en-IN', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </>
+              ) : (
+                <span className="tracking-[0.25em] text-xl sm:text-2xl text-slate-200">
+                  ₹••••••••
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className="text-[10px] text-slate-400 font-mono block">UPI ID</span>
+            <span className="text-xs font-semibold text-orange-200 font-mono">{upiId}</span>
           </div>
         </div>
       </div>

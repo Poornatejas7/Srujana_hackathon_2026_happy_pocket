@@ -50,7 +50,8 @@ import { RawTransaction, Category } from '@/types/finance';
 import { enrichAndAnalyzeTransactions, getCategoryIcon, getCategoryThemeLabel, saveUserMerchantOverride } from '@/lib/engine';
 
 export default function HappyPocketApp() {
-  const [balance, setBalance] = useState<number>(0);
+  const [balance, setBalance] = useState<number>(10000.00);
+  const [primaryAccount, setPrimaryAccount] = useState<any>(null);
   const [transactions, setTransactions] = useState<DisplayTransaction[]>([]);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
@@ -146,6 +147,20 @@ export default function HappyPocketApp() {
   const loadFromDb = async () => {
     try {
       setIsDbLoading(true);
+
+      // 1. Fetch Primary Bank Account from Core Banking Database
+      try {
+        const accRes = await fetch('/api/accounts');
+        const accData = await accRes.json();
+        if (accData.success && accData.primaryAccount) {
+          setBalance(accData.primaryAccount.balance);
+          setPrimaryAccount(accData.primaryAccount);
+        }
+      } catch (accErr) {
+        console.warn('Accounts fetch fallback:', accErr);
+      }
+
+      // 2. Fetch Transactions Ledger
       const res = await fetch('/api/transactions');
       const data = await res.json();
 
@@ -217,12 +232,18 @@ export default function HappyPocketApp() {
     }
   };
 
-  // Clear all transactions from MongoDB Atlas & local state
+  // Clear all transactions from MongoDB Atlas & restore bank balance
   const handleClearAllData = async () => {
     try {
       setIsDbLoading(true);
+      await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_balance' }),
+      });
       const res = await fetch('/api/transactions?all=true', { method: 'DELETE' });
       const data = await res.json();
+      setBalance(10000.00);
       setDbCount(0);
       setExtractedRawTxs([]);
       setAnalysisResult(null);
@@ -230,7 +251,7 @@ export default function HappyPocketApp() {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('hp_merchant_category_overrides');
       }
-      showToast(`🗑️ Cleared ${data?.deletedCount ?? 0} transactions from database`);
+      showToast(`🗑️ Cleared transactions. Bank balance restored to ₹10,000.00`);
     } catch (err) {
       console.error('Failed to clear data:', err);
       showToast('Failed to clear database data');
@@ -260,27 +281,34 @@ export default function HappyPocketApp() {
   };
 
   // Payment Success Handler
-  const handlePaymentSuccess = (amount: number, merchant: string, txDoc?: any) => {
-    setBalance((prev) => Math.max(0, prev - amount));
+  const handlePaymentSuccess = (amount: number, merchant: string, txDoc?: any, newBal?: number) => {
+    if (typeof newBal === 'number') {
+      setBalance(newBal);
+    } else {
+      setBalance((prev) => Math.max(0, prev - amount));
+    }
+    const cat = txDoc?.category || 'Shopping & Discretionary';
+    const txType = cat === 'Groceries' ? 'grocery' : cat === 'Transport & Fuel' ? 'fuel' : 'other';
+
     const newTx: DisplayTransaction = {
       id: txDoc?._id || txDoc?.id || `tx_${Date.now()}`,
       title: txDoc?.cleanMerchant || merchant,
       rawTimeText: 'Just now',
       timestamp: txDoc?.timestamp || new Date().toISOString(),
       amount: -amount,
-      type: 'other',
+      type: txType,
       accountType: 'Merchant / Business',
       theme: txDoc?.theme,
       themeIcon: txDoc?.themeIcon,
       vpaHandle: txDoc?.vpaHandle,
       payeeName: txDoc?.payeeName || merchant,
-      category: txDoc?.theme || 'Payment',
+      category: cat,
     };
     setTransactions((prev) => [newTx, ...prev]);
 
     const rawEntry: RawTransaction = {
       id: newTx.id,
-      accountId: 'acc_primary_sbi',
+      accountId: txDoc?.accountId || '50100492817482',
       amount: -amount,
       rawDescription: txDoc?.rawDescription || `UPI/DR/${merchant}/PAYMENT`,
       currency: 'INR',
@@ -291,6 +319,7 @@ export default function HappyPocketApp() {
       accountType: 'Merchant / Business',
       theme: txDoc?.theme,
       themeIcon: txDoc?.themeIcon,
+      category: cat,
       isInternalTransfer: false,
       isReimbursementOffset: false,
       isRecurringAutoPay: false,
@@ -302,14 +331,19 @@ export default function HappyPocketApp() {
       return updated;
     });
 
-    const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '🏷️'} ${txDoc.theme}]` : '';
-    showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}${themeMsg} • Recorded in Atlas!`);
+    const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '🏷️'} ${cat}]` : '';
+    showToast(`Paid ₹${amount.toLocaleString('en-IN')} to ${merchant}${themeMsg} • Settled via UPI!`);
   };
 
   // Send Money Handler
-  const handleSendSuccess = (amount: number, recipient: string, txDoc?: any) => {
-    setBalance((prev) => Math.max(0, prev - amount));
+  const handleSendSuccess = (amount: number, recipient: string, txDoc?: any, newBal?: number) => {
+    if (typeof newBal === 'number') {
+      setBalance(newBal);
+    } else {
+      setBalance((prev) => Math.max(0, prev - amount));
+    }
     const isSelf = txDoc?.isInternalTransfer || recipient.toLowerCase().includes('kotresh') || recipient.toLowerCase().includes('self');
+    const cat = txDoc?.category || (isSelf ? 'Internal Transfer' : 'Reimbursement / Split');
     const newTx: DisplayTransaction = {
       id: txDoc?._id || txDoc?.id || `tx_${Date.now()}`,
       title: txDoc?.cleanMerchant || recipient,
@@ -322,13 +356,13 @@ export default function HappyPocketApp() {
       themeIcon: txDoc?.themeIcon,
       vpaHandle: txDoc?.vpaHandle,
       payeeName: txDoc?.payeeName || recipient,
-      category: isSelf ? 'Internal Transfer' : 'Reimbursement / Split',
+      category: cat,
     };
     setTransactions((prev) => [newTx, ...prev]);
 
     const rawEntry: RawTransaction = {
       id: newTx.id,
-      accountId: 'acc_primary_sbi',
+      accountId: txDoc?.accountId || '50100492817482',
       amount: -amount,
       rawDescription: txDoc?.rawDescription || `WDL TFR UPI/DR/TFR/${recipient}/UPI`,
       currency: 'INR',
@@ -339,6 +373,7 @@ export default function HappyPocketApp() {
       accountType: 'Personal',
       theme: txDoc?.theme,
       themeIcon: txDoc?.themeIcon,
+      category: cat,
       isInternalTransfer: isSelf,
       isReimbursementOffset: !isSelf,
       isRecurringAutoPay: false,
@@ -350,8 +385,8 @@ export default function HappyPocketApp() {
       return updated;
     });
 
-    const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '👤'} ${txDoc.theme}]` : '';
-    showToast(`Sent ₹${amount.toLocaleString('en-IN')} to ${recipient}${themeMsg} • Recorded in Atlas!`);
+    const themeMsg = txDoc?.theme ? ` [${txDoc.themeIcon || '👤'} ${cat}]` : '';
+    showToast(`Sent ₹${amount.toLocaleString('en-IN')} to ${recipient}${themeMsg} • Settled via UPI!`);
   };
 
   // Statement Upload Handler
@@ -817,11 +852,14 @@ export default function HappyPocketApp() {
                     {/* TAB 1: HOME DASHBOARD */}
                     {activeTab === 'home' && (
                       <>
-                        {/* Account Card (Balance & Masked number) */}
+                        {/* Account Card (Core Banking Balance & Masked number) */}
                         <AccountCard
+                          bankName={primaryAccount?.bankName || 'HDFC Bank'}
                           accountName="Savings Account"
-                          accountNumberMask="•••• 5274"
+                          accountNumberMask={primaryAccount?.maskedAccountNumber || '•••• 7482'}
+                          upiId={primaryAccount?.upiId || 'poornatejas@okhdfcbank'}
                           balance={balance}
+                          onRefresh={loadFromDb}
                         />
 
                         {/* 3 Quick Action Buttons: Scan & Pay, Send Money, Transactions */}
@@ -1092,12 +1130,14 @@ export default function HappyPocketApp() {
       <ScanPayModal
         isOpen={isScanOpen}
         onClose={() => setIsScanOpen(false)}
+        balance={balance}
         onPaymentSuccess={handlePaymentSuccess}
       />
 
       <SendMoneyModal
         isOpen={isSendOpen}
         onClose={() => setIsSendOpen(false)}
+        balance={balance}
         onSendSuccess={handleSendSuccess}
       />
 
