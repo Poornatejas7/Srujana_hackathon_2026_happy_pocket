@@ -25,7 +25,16 @@ import {
   SlidersHorizontal,
   Sparkles,
   Maximize2,
-  Landmark
+  Landmark,
+  Monitor,
+  LayoutDashboard,
+  History,
+  User,
+  CreditCard,
+  ArrowRight,
+  ArrowUpRight,
+  Plus,
+  FileUp
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 import AccountCard from '@/components/AccountCard';
@@ -93,6 +102,38 @@ export default function HappyPocketApp() {
   const [editingTransaction, setEditingTransaction] = useState<DisplayTransaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // View Mode: 'web' (Professional Web Portal) vs 'mobile' (Phone Preview Frame)
+  const [viewMode, setViewMode] = useState<'web' | 'mobile'>('web');
+
+  // Computed Financial Metrics for Professional Web UI
+  const unclassifiedCount = useMemo(() => {
+    return transactions.filter(t => t.needsReview || t.isAmbiguous || t.category === 'Other / Unknown').length;
+  }, [transactions]);
+
+  const totalInflow = useMemo(() => {
+    return transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions]);
+
+  const totalOutflow = useMemo(() => {
+    return transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  }, [transactions]);
+
+  const trueLivingSpend = useMemo(() => {
+    if (analysisResult?.kpis?.trueLivingExpenses !== undefined) {
+      return analysisResult.kpis.trueLivingExpenses;
+    }
+    return totalOutflow;
+  }, [analysisResult, totalOutflow]);
+
+  const netSavingsCapacity = useMemo(() => {
+    return Math.max(0, totalInflow - trueLivingSpend);
+  }, [totalInflow, trueLivingSpend]);
+
+  const unnecessarySpendTotal = useMemo(() => {
+    return analysisResult?.kpis?.unnecessaryExpenditureTotal ?? 
+      transactions.filter(t => t.isUnnecessary && t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  }, [analysisResult, transactions]);
 
   // Android Studio Emulator State
   const [isPoweredOn, setIsPoweredOn] = useState(true);
@@ -761,532 +802,705 @@ export default function HappyPocketApp() {
   };
 
   return (
-    <div className="min-h-screen bg-[#18191C] text-slate-100 flex flex-col font-sans select-none overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans select-none antialiased overflow-x-hidden">
       
-      {/* ======================================================== */}
-      {/* 1. TOP WORKSPACE APPLICATION HEADER */}
-      {/* ======================================================== */}
-      <header className="w-full bg-[#181A1F] border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between text-xs text-slate-300 shrink-0 z-40 shadow-xs">
-        
-        {/* Left: Brand Identity & Active Profile */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-white font-extrabold shadow-sm">
-              <span className="text-xs">⚡</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-white text-xs tracking-tight">
-                  Happy Pocket
-                </span>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                  FinLens
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <span className="h-3.5 w-px bg-slate-800 hidden sm:inline" />
-
-          {/* Running Device Indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 text-[11px]">
-            <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-[10px]">Pixel 8 Pro</span>
-          </div>
+      {/* Floating Global Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
-
-        {/* Right: Atlas Live Diagnostics, Seed Demo & Sync */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Seed Meaningful Sample Data Button */}
-          <button
-            type="button"
-            onClick={handleSeedSampleData}
-            title="Seed 15 Realistic Indian UPI Transactions into MongoDB Atlas"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 active:scale-95 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer"
-          >
-            <Sparkles className="w-3 h-3 text-emerald-400" />
-            <span>Sample Data</span>
-          </button>
-
-          {/* MongoDB Atlas Live Badge */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-[10px] font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-bold hidden sm:inline">Atlas:</span>
-            <span>{dbCount > 0 ? `${dbCount} Txs` : 'Connected'}</span>
-          </div>
-
-          {/* Sync DB */}
-          <button
-            type="button"
-            onClick={loadFromDb}
-            title="Sync Data from Atlas"
-            className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition cursor-pointer border border-slate-700/60 flex items-center gap-1"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isDbLoading ? 'animate-spin' : ''}`} />
-            <span className="text-[10px] font-bold hidden md:inline">Sync</span>
-          </button>
-
-          {/* Navigation Mode Pill */}
-          <div className="hidden md:flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
-            <button
-              type="button"
-              onClick={() => setNavStyle('buttons')}
-              title="Android 3-Button Navigation"
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                navStyle === 'buttons' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              3-Btn
-            </button>
-            <button
-              type="button"
-              onClick={() => setNavStyle('gesture')}
-              title="Android Gesture Pill"
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                navStyle === 'gesture' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Gesture
-            </button>
-          </div>
-
-          {/* Power Standby */}
-          <button
-            type="button"
-            onClick={() => setIsPoweredOn((prev) => !prev)}
-            title={isPoweredOn ? 'Put Display in Standby' : 'Wake Display'}
-            className={`p-1.5 rounded-lg border transition cursor-pointer ${
-              isPoweredOn 
-                ? 'bg-slate-800/80 hover:bg-red-950/60 text-slate-300 hover:text-red-400 border-slate-700/60' 
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
-            }`}
-          >
-            <Power className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-      </header>
+      )}
 
       {/* ======================================================== */}
-      {/* 2. EMULATOR WORKSPACE CANVAS (Android Studio Viewport) */}
+      {/* MODE 1: PROFESSIONAL FINTECH WEB UI (DEFAULT) */}
       {/* ======================================================== */}
-      <main className="flex-1 w-full bg-[radial-gradient(#26282E_1px,transparent_1px)] [background-size:20px_20px] flex items-center justify-center p-2 sm:p-6 overflow-y-auto relative">
-        
-        {/* Floating Toast Notification inside Emulator view */}
-        {toastMessage && (
-          <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-bounce">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
-
-        {/* Device Container (Clean Smartphone Display) */}
-        <div className="relative flex items-center justify-center max-w-full">
+      {viewMode === 'web' ? (
+        <div className="flex-1 flex w-full h-screen overflow-hidden">
           
-          {/* -------------------------------------------------------- */}
-          {/* THE SMARTPHONE DEVICE (CLEAN SLIM FLAGSHIP BEZEL) */}
-          {/* -------------------------------------------------------- */}
-          <div className="relative w-[380px] sm:w-[412px] h-[840px] max-h-[92vh] bg-[#1A1C20] rounded-[48px] p-[9px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.08)] flex flex-col justify-between transition-all duration-300">
-            
-            {/* Speaker Ear Slit at Top Hardware Bezel */}
-            <div className="w-16 h-1 bg-[#0D0E10] rounded-full mx-auto mb-1 shrink-0 shadow-inner" />
-
-            {/* -------------------------------------------------------- */}
-            {/* SCREEN DISPLAY GLASS (ANDROID APPLICATION VIEWPORT) */}
-            {/* -------------------------------------------------------- */}
-            <div className="w-full flex-1 bg-[#EEF2F6] text-slate-900 rounded-[44px] overflow-hidden flex flex-col relative shadow-inner">
-              
-              {/* Screenshot Camera Flash Animation */}
-              {isFlashing && (
-                <div className="absolute inset-0 bg-white z-50 pointer-events-none animate-flash" />
-              )}
-
-              {/* Volume HUD Toast Overlay */}
-              {showVolumeHud && (
-                <div className="absolute right-3 top-16 z-40 bg-slate-900/90 text-white backdrop-blur-md px-3 py-2 rounded-2xl shadow-xl flex items-center gap-2 border border-slate-700 animate-fadeIn">
-                  {volumeLevel === 0 ? (
-                    <VolumeX className="w-4 h-4 text-red-400" />
-                  ) : volumeLevel < 50 ? (
-                    <Volume1 className="w-4 h-4 text-orange-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-emerald-400" />
-                  )}
-                  <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-orange-500 rounded-full transition-all duration-150"
-                      style={{ width: `${volumeLevel}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono font-bold">{volumeLevel}%</span>
+          {/* 1. LEFT SIDEBAR NAVIGATION */}
+          <aside className="w-64 bg-white border-r border-slate-200/80 hidden md:flex flex-col justify-between shrink-0 shadow-[1px_0_12px_rgba(15,23,42,0.02)] z-30">
+            <div className="p-5 flex flex-col gap-5">
+              {/* Brand Logo & Tagline */}
+              <div 
+                onClick={() => setActiveTab('home')}
+                className="flex items-center gap-3 cursor-pointer group"
+                title="Happy Pocket • Home"
+              >
+                <div className="group-hover:scale-105 transition-transform">
+                  <HappyPocketLogo size={36} />
                 </div>
-              )}
-
-              {/* Standby / Screen Off Overlay */}
-              {!isPoweredOn ? (
-                <div 
-                  onClick={() => setIsPoweredOn(true)}
-                  className="absolute inset-0 z-40 bg-[#0B0D10] flex flex-col items-center justify-center p-6 text-center cursor-pointer"
-                >
-                  <div className="p-3 rounded-full bg-slate-800/80 text-orange-400 mb-3 border border-slate-700 animate-pulse">
-                    <Power className="w-6 h-6" />
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-black text-slate-900 text-sm tracking-tight">Happy Pocket</span>
+                    <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold bg-orange-100 text-orange-700 border border-orange-200">
+                      FinLens
+                    </span>
                   </div>
-                  <h3 className="text-white font-extrabold text-base tracking-tight">
-                    Pixel 8 Pro Standby
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Tap screen or press Power button to unlock
-                  </p>
-                  <span className="mt-4 text-[11px] font-mono text-slate-500">
-                    Android 14 • Happy Pocket
-                  </span>
+                  <p className="text-[10px] text-slate-400 font-medium">Financial Intelligence</p>
                 </div>
-              ) : null}
+              </div>
 
-              {/* AUTH SCREEN IF NOT LOGGED IN */}
-              {!isLoggedIn ? (
-                <div className="w-full h-full flex flex-col overflow-y-auto scrollbar-none">
-                  {/* Status Bar */}
-                  <div className="w-full pt-3 px-6 flex items-center justify-between text-slate-800 select-none shrink-0">
-                    <span className="font-bold text-xs tracking-tight font-sans">{currentTime}</span>
-                    <div className="w-3.5 h-3.5 rounded-full bg-black ring-1 ring-slate-800 shadow-inner" />
-                    <div className="flex items-center gap-1.5 text-slate-800">
-                      <span className="text-[10px] font-bold">5G</span>
-                      <Wifi className="w-3 h-3 stroke-[2.4]" />
-                      <div className="w-4 h-2 rounded-[3px] border-[1.2px] border-slate-800 p-0.5 flex items-center">
-                        <div className="w-full h-full bg-slate-800 rounded-[1px]" />
+              {/* Active Account Switcher Card */}
+              <div
+                onClick={() => setIsSwitcherOpen(true)}
+                className="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 transition cursor-pointer group"
+                title="Switch Account Role (Personal, Medical Shop, College)"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-orange-400 shrink-0 bg-amber-100 flex items-center justify-center">
+                      <img src="/avatar.jpg" alt="Kotresh C" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-900 truncate">
+                          {currentUserRole === 'medical' ? 'Medical Shop' : currentUserRole === 'college' ? 'College Account' : 'Kotresh C'}
+                        </span>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       </div>
+                      <p className="text-[10px] text-slate-500 font-mono truncate">
+                        {currentUserRole === 'personal' ? 'HDFC •••• 0283' : 'Merchant Portal'}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex-1">
-                    <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" initialRole={currentUserRole} />
-                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 shrink-0" />
+                </div>
+              </div>
+
+              {/* Navigation Menu Items */}
+              <nav className="space-y-1">
+                {[
+                  { id: 'home', label: 'Dashboard', icon: LayoutDashboard },
+                  { id: 'expense', label: 'Expense Velocity', icon: BarChart3, badge: 'Live' },
+                  { id: 'insights', label: 'Smart Insights', icon: Sparkles },
+                  { id: 'history', label: 'Transaction Ledger', icon: History, badge: unclassifiedCount > 0 ? `⚠️ ${unclassifiedCount}` : undefined },
+                  { id: 'payments', label: 'UPI Bill Payments', icon: CreditCard },
+                  { id: 'profile', label: 'Account & Security', icon: User },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveTab(item.id as NavTab)}
+                      className={`w-full flex items-center justify-between p-2.5 px-3 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                        isActive
+                          ? 'bg-orange-500 text-white font-bold shadow-sm shadow-orange-500/20'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Sidebar Bottom Footer */}
+            <div className="p-4 border-t border-slate-200/80 space-y-2 bg-slate-50/50">
+              {/* Atlas DB Live Status Badge */}
+              <div className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/60 shadow-2xs">
+                <div className="flex items-center gap-1.5 font-mono text-slate-700">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="font-bold">Atlas:</span>
+                  <span>{dbCount} Records</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadFromDb}
+                  className="text-slate-400 hover:text-cyan-600 transition cursor-pointer p-0.5"
+                  title="Sync Atlas DB"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isDbLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {/* Load Sample Data Button */}
+              <button
+                type="button"
+                onClick={handleSeedSampleData}
+                className="w-full flex items-center justify-center gap-1.5 p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 text-xs font-bold border border-emerald-200/80 transition cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Load Sample Data</span>
+              </button>
+            </div>
+          </aside>
+
+          {/* 2. MAIN APPLICATION WORKSPACE */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            
+            {/* Top Header Bar */}
+            <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between shrink-0 z-20 shadow-2xs">
+              <div className="flex items-center gap-3 min-w-0">
+                {/* Mobile Hamburger Menu Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="md:hidden p-2 rounded-xl hover:bg-slate-100 text-slate-700 cursor-pointer"
+                >
+                  <Menu className="w-5 h-5 text-orange-500" />
+                </button>
+
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-slate-900 tracking-tight capitalize truncate">
+                    {activeTab === 'home' ? 'Financial Dashboard' : activeTab === 'expense' ? 'Expense Velocity & Anti-Distortion' : activeTab === 'insights' ? 'Smart Insights & Advisory' : activeTab === 'history' ? 'Transaction Ledger' : activeTab === 'payments' ? 'UPI Payments & Bills' : 'Account Profile'}
+                  </h2>
+                  <p className="text-[11px] text-slate-400 font-medium hidden sm:block truncate">
+                    Indian Core Banking & UPI Intelligence • Real-Time Ledger
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Action Tools */}
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                {/* View Mode Toggle (Web Portal vs Phone Preview Frame) */}
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('web')}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer bg-white text-slate-900 shadow-2xs"
+                  >
+                    <Monitor className="w-3.5 h-3.5 text-orange-500" />
+                    <span className="hidden lg:inline">Web Portal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('mobile')}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer text-slate-500 hover:text-slate-800"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="hidden lg:inline">Phone Frame</span>
+                  </button>
+                </div>
+
+                {/* Primary Action: Scan & Pay */}
+                <button
+                  type="button"
+                  onClick={handleScanPay}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold text-xs shadow-sm shadow-orange-500/20 transition cursor-pointer"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Scan & Pay</span>
+                </button>
+
+                {/* Send Money Button */}
+                <button
+                  type="button"
+                  onClick={handleSendMoney}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-800 font-bold text-xs border border-slate-200 transition cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Send</span>
+                </button>
+
+                {/* RBI Bank Link */}
+                <button
+                  type="button"
+                  onClick={() => setIsAaOpen(true)}
+                  className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition cursor-pointer"
+                >
+                  <Landmark className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Link Bank</span>
+                </button>
+
+                {/* QR Receive Quick Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsQrOpen(true)}
+                  title="Show My Bharat QR"
+                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition cursor-pointer border border-slate-200"
+                >
+                  <QrCode className="w-4 h-4" />
+                </button>
+              </div>
+            </header>
+
+            {/* Scrollable Main Workspace Body */}
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#F8FAFC]">
+              {!isLoggedIn ? (
+                <div className="max-w-md mx-auto pt-8">
+                  <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" initialRole={currentUserRole} />
                 </div>
               ) : currentUserRole === 'medical' || currentUserRole === 'college' ? (
-                /* ======================================================== */
-                /* MERCHANT PORTAL: MEDICAL SHOP OR EDUCATION COLLEGE */
-                /* "which should show only thr qr code and the recived money total money" */
-                /* ======================================================== */
-                <div className="w-full h-full flex flex-col overflow-hidden bg-slate-50">
-                  {/* Android Status Bar */}
-                  <div className="w-full pt-2.5 pb-1 px-6 flex items-center justify-between text-slate-800 select-none shrink-0 bg-white z-20">
-                    <span className="font-bold text-xs tracking-tight font-sans">{currentTime}</span>
-                    <div className="w-3.5 h-3.5 rounded-full bg-black ring-1 ring-slate-800 shadow-inner" />
-                    <div className="flex items-center gap-1.5 text-slate-800">
-                      <span className="text-[10px] font-extrabold tracking-wider">5G</span>
-                      <Wifi className="w-3 h-3 stroke-[2.4]" />
-                      <div className="w-4 h-2 rounded-[3px] border-[1.2px] border-slate-800 p-0.5 flex items-center">
-                        <div className="w-[90%] h-full bg-slate-800 rounded-[1px]" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Merchant View Showing Only QR Code & Total Received Money */}
-                  <div className="flex-1 overflow-hidden">
-                    <MerchantDashboard 
-                      merchantType={currentUserRole} 
-                      onSwitchAccount={() => setIsSwitcherOpen(true)} 
-                      onLogout={handleLogout} 
-                    />
-                  </div>
-
-                  {/* Android Bottom Navigation Gesture Bar (Tap to Switch Account) */}
-                  <div className="w-full py-1.5 px-6 flex items-center justify-center shrink-0 bg-white border-t border-slate-100 z-20">
-                    <div 
-                      onClick={() => setIsSwitcherOpen(true)}
-                      title="Tap to Switch Account"
-                      className="w-32 h-1 bg-slate-800 rounded-full cursor-pointer hover:bg-slate-950 transition"
-                    />
-                  </div>
+                <div className="max-w-5xl mx-auto">
+                  <MerchantDashboard 
+                    merchantType={currentUserRole} 
+                    onSwitchAccount={() => setIsSwitcherOpen(true)} 
+                    onLogout={handleLogout} 
+                  />
                 </div>
-              ) : (
-                <>
-                  {/* ======================================================== */}
-                  {/* 1. ANDROID 14 SYSTEM STATUS BAR */}
-                  {/* ======================================================== */}
-                  <div className="w-full pt-2.5 pb-1 px-6 flex items-center justify-between text-slate-800 select-none shrink-0 bg-transparent z-20">
-                    {/* Left: Dynamic Clock */}
-                    <span className="font-bold text-xs tracking-tight font-sans">
-                      {currentTime}
-                    </span>
-
-                    {/* Center: Camera Punch-Hole Cutout */}
-                    <div 
-                      className="w-3.5 h-3.5 rounded-full bg-black ring-1 ring-slate-800 shadow-inner" 
-                      title="Android Front Camera"
-                    />
-
-                    {/* Right: Cellular 5G, Wi-Fi, Battery */}
-                    <div className="flex items-center gap-1.5 text-slate-800">
-                      <span className="text-[10px] font-extrabold tracking-wider">5G</span>
-                      {/* Wi-Fi Icon */}
-                      <Wifi className="w-3 h-3 stroke-[2.4]" />
-                      {/* Battery 98% Icon */}
-                      <div className="w-4 h-2 rounded-[3px] border-[1.2px] border-slate-800 p-0.5 flex items-center">
-                        <div className="w-[90%] h-full bg-slate-800 rounded-[1px]" />
+              ) : activeTab === 'home' ? (
+                <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
+                  
+                  {/* 4 TOP HIGH-IMPACT FINANCIAL KPI CARDS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* 1. Core Banking Account Balance */}
+                    <div className="bg-white rounded-[24px] p-5 border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">Available Core Balance</span>
+                        <button type="button" onClick={loadFromDb} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                          <RefreshCw className={`w-3.5 h-3.5 ${isDbLoading ? 'animate-spin' : ''}`} />
+                        </button>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* ======================================================== */}
-                  {/* 2. TOP MOBILE APP HEADER WITH CLEAR DROP-DOWN MENU ICON */}
-                  {/* ======================================================== */}
-                  <div className="px-4 pt-1.5 pb-2 flex items-center justify-between shrink-0 bg-transparent z-20">
-                    
-                    {/* Left: CLEAR DROP-DOWN MENU ICON (Hamburger button) */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsDrawerOpen(true)}
-                        className="flex items-center gap-1.5 p-2 px-2.5 rounded-2xl bg-white shadow-xs border border-slate-200/90 hover:bg-slate-50 text-slate-800 active:scale-95 transition-all cursor-pointer group"
-                        aria-label="Open Dropdown Menu"
-                        title="Open Menu • All Functionalities"
-                      >
-                        <Menu className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-extrabold text-slate-700 hidden sm:inline">
-                          Menu
+                      <div className="my-2">
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-sans">
+                          ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
-                        <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600" />
-                      </button>
-
-                      {/* Mascot Brand Logo */}
-                      <div 
-                        className="flex items-center cursor-pointer active:scale-95 transition-transform"
-                        onClick={() => setActiveTab('home')}
-                        title="Happy Pocket Home"
-                      >
-                        <HappyPocketLogo size={42} />
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500 font-mono">
+                        <span>{primaryAccount?.bankName || 'HDFC Bank'} •••• 0283</span>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Active</span>
                       </div>
                     </div>
 
-                    {/* Center: Dynamic Screen Title if not Home */}
-                    {activeTab !== 'home' && (
-                      <h2 className="text-sm font-extrabold text-slate-900 tracking-tight capitalize truncate max-w-[130px]">
-                        {activeTab === 'expense' ? 'Expenses' : activeTab === 'insights' ? 'Smart Insights' : activeTab}
-                      </h2>
-                    )}
-
-                    {/* Right: Quick Action Buttons (QR Scanner & Profile Avatar) */}
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setIsQrOpen(true)}
-                        title="My Bharat QR"
-                        className="p-2 rounded-2xl bg-white shadow-xs border border-slate-200/90 text-slate-700 hover:text-orange-500 transition cursor-pointer"
-                      >
-                        <QrCode className="w-4 h-4" />
-                      </button>
-
-                      <div 
-                        onClick={() => setIsSwitcherOpen(true)}
-                        title="Switch Bank Account (Personal, Medical Shop, College)"
-                        className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-xs cursor-pointer hover:ring-2 hover:ring-orange-400 transition bg-amber-100 flex items-center justify-center shrink-0"
-                      >
-                        <img
-                          src="/avatar.jpg"
-                          alt="Kotresh C"
-                          className="w-full h-full object-cover"
-                        />
+                    {/* 2. Total Living Spend */}
+                    <div className="bg-white rounded-[24px] p-5 border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">Total Living Spend</span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Anti-Distortion Net
+                        </span>
+                      </div>
+                      <div className="my-2">
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-sans">
+                          ₹{trueLivingSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                        <span>Net outflows this month</span>
+                        <span className="font-semibold text-slate-700">{transactions.filter(t => t.amount < 0).length} Debits</span>
                       </div>
                     </div>
 
+                    {/* 3. Net Savings Capacity */}
+                    <div className="bg-white rounded-[24px] p-5 border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-400">Net Savings Capacity</span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          +₹{totalInflow.toLocaleString('en-IN')} Inflow
+                        </span>
+                      </div>
+                      <div className="my-2">
+                        <span className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight font-sans">
+                          +₹{netSavingsCapacity.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                        <span>Income minus Living spend</span>
+                        <span className="font-bold text-emerald-600">
+                          {totalInflow > 0 ? `${Math.round((netSavingsCapacity / totalInflow) * 100)}% Rate` : '0%'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 4. Avoidable Wealth Leakage */}
+                    <div className="bg-white rounded-[24px] p-5 border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-600 flex items-center gap-1">
+                          <span>🚨</span>
+                          <span>Avoidable Leakage</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                          Impulse & Fast Fashion
+                        </span>
+                      </div>
+                      <div className="my-2">
+                        <span className="text-2xl sm:text-3xl font-black text-rose-600 tracking-tight font-sans">
+                          ₹{unnecessarySpendTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                        <span className="truncate">5-Yr SIP: ₹{(analysisResult?.kpis?.unnecessarySIPProjection5Yr || 260820).toLocaleString('en-IN')}</span>
+                        <button 
+                          type="button"
+                          onClick={() => setActiveTab('expense')}
+                          className="font-bold text-orange-600 hover:underline cursor-pointer text-[10px]"
+                        >
+                          Track →
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* ======================================================== */}
-                  {/* 3. SCROLLABLE SCREEN BODY VIEWPORT (ALL FUNCTIONALITIES) */}
-                  {/* ======================================================== */}
-                  <div className="flex-1 overflow-y-auto scrollbar-none px-4 py-1.5 space-y-3.5 relative">
-                    
-                    {/* TAB 1: HOME DASHBOARD */}
-                    {activeTab === 'home' && (
-                      <>
-                        {/* Account Card (Core Banking Balance & Masked number) */}
-                        <AccountCard
-                          bankName={primaryAccount?.bankName || 'HDFC Bank'}
-                          accountName="Savings Account"
-                          accountNumberMask={primaryAccount?.maskedAccountNumber || '•••• 7482'}
-                          upiId={primaryAccount?.upiId || 'poornatejas@okhdfcbank'}
-                          balance={balance}
-                          onRefresh={loadFromDb}
-                        />
+                  {/* TWO-COLUMN GRID: FULL TRANSACTIONS (65%) & SERVICES SIDEBAR (35%) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    {/* Left (Col-Span-2): Full-featured Recent Transactions */}
+                    <div className="lg:col-span-2">
+                      <RecentTransactions
+                        transactions={transactions}
+                        onTransactionClick={handleOpenEditTransaction}
+                        onViewAll={() => setActiveTab('history')}
+                      />
+                    </div>
 
-                        {/* 3 Quick Action Buttons: Scan & Pay, Send Money, Transactions */}
-                        <ActionButtons
-                          onScanPayClick={handleScanPay}
-                          onSendMoneyClick={handleSendMoney}
-                          onTransactionsClick={handleTransactionsClick}
-                        />
+                    {/* Right (Col-Span-1): Side Services Cards */}
+                    <div className="space-y-4">
+                      {/* Quick Payment Tools */}
+                      <div className="bg-white rounded-[26px] p-5 border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)] space-y-3">
+                        <h3 className="text-sm font-bold text-slate-900 tracking-tight">Quick Financial Actions</h3>
+                        
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={handleScanPay}
+                            className="w-full flex items-center justify-between p-3 rounded-2xl bg-orange-50/60 hover:bg-orange-100/70 border border-orange-200/80 transition cursor-pointer text-left group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                <QrCode className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-slate-900 block group-hover:text-orange-600 transition-colors">Scan & Pay UPI QR</span>
+                                <span className="text-[10px] text-slate-500">Instant camera & merchant settlement</span>
+                              </div>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-orange-400 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
 
-                        {/* Streamlined RBI Account Aggregator Quick Pill */}
+                          <button
+                            type="button"
+                            onClick={handleSendMoney}
+                            className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 transition cursor-pointer text-left group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                <Send className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-slate-900 block group-hover:text-blue-600 transition-colors">Send Money (P2P)</span>
+                                <span className="text-[10px] text-slate-500">Transfers to friends & contacts</span>
+                              </div>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsUploadOpen(true)}
+                            className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 transition cursor-pointer text-left group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                <FileUp className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-slate-900 block group-hover:text-indigo-600 transition-colors">Import Bank Statement</span>
+                                <span className="text-[10px] text-slate-500">PDF & CSV Parser with auto-categorization</span>
+                              </div>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live RBI Account Aggregator Card */}
+                      <div className="bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white rounded-[26px] p-5 shadow-sm border border-emerald-500/30 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+                              <Landmark className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <span className="text-xs font-bold text-white">RBI Account Aggregator</span>
+                          </div>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/30 text-emerald-300 border border-emerald-400/30">
+                            ReBIT
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-emerald-200/80 leading-relaxed">
+                          Link external savings accounts via RBI consent for real-time live statements, auto-reconciliation, and zero manual entry.
+                        </p>
+
                         <button
                           type="button"
                           onClick={() => setIsAaOpen(true)}
-                          className="w-full py-2 px-3.5 rounded-2xl bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/20 text-white flex items-center justify-between transition cursor-pointer group shadow-xs"
+                          className="w-full py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow transition cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-5 h-5 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                              <Landmark className="w-3 h-3" />
-                            </div>
-                            <span className="text-[11px] font-bold text-emerald-200 group-hover:text-emerald-100 transition-colors">
-                              RBI Account Aggregator • Live Bank Consent
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-bold text-emerald-400 group-hover:translate-x-0.5 transition-transform">
-                            Connect →
-                          </span>
+                          <span>Connect Bank via OTP</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </button>
-
-                        {/* Recent Transactions List with Theme Badges */}
-                        <RecentTransactions
-                          transactions={transactions.slice(0, 4)}
-                          onTransactionClick={handleOpenEditTransaction}
-                          onViewAll={() => setActiveTab('history')}
-                        />
-                      </>
-                    )}
-
-                    {/* TAB 2: EXPENSE TRACKER & VELOCITY (PARTICULAR AMOUNTS) */}
-                    {activeTab === 'expense' && (
-                      <div className="pb-2">
-                        <ExpenseTrackerTab 
-                          transactions={transactions} 
-                          rawTransactions={extractedRawTxs} 
-                          onNavigateToAdvisor={() => setActiveTab('insights')}
-                          onClassifyMerchant={handleOpenClassifier}
-                          onEditTransaction={handleOpenEditTransaction}
-                        />
                       </div>
-                    )}
 
-                    {/* TAB 3: SMART INSIGHTS & AI WEALTH ADVISOR */}
-                    {activeTab === 'insights' && (
-                      <div className="pb-2">
-                        <InsightsTab transactions={transactions} />
+                      {/* My Bharat QR Preview Card */}
+                      <div className="bg-white rounded-[26px] p-5 border border-slate-100 shadow-[0_4px_24px_rgba(15,23,42,0.04)] flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">Receive via UPI</h4>
+                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">kotresh@okhdfcbank</p>
+                          <button
+                            type="button"
+                            onClick={() => setIsQrOpen(true)}
+                            className="mt-2 text-[11px] font-bold text-orange-600 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Display QR Code</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <div 
+                          onClick={() => setIsQrOpen(true)}
+                          className="w-14 h-14 p-1.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center cursor-pointer hover:border-orange-400 transition"
+                        >
+                          <QrCode className="w-9 h-9 text-slate-800" />
+                        </div>
                       </div>
-                    )}
-
-                    {/* TAB 4: UPI BILL PAYMENTS & RECHARGES */}
-                    {activeTab === 'payments' && (
-                      <div className="pb-2">
-                        <PaymentsTab
-                          onScanClick={handleScanPay}
-                          onSendClick={handleSendMoney}
-                        />
-                      </div>
-                    )}
-
-                    {/* TAB 5: TRANSACTIONS HISTORY & FILTER */}
-                    {activeTab === 'history' && (
-                      <div className="pb-2">
-                        <HistoryTab
-                          transactions={transactions}
-                          onOpenUpload={() => setIsUploadOpen(true)}
-                          onOpenAccountAggregator={() => setIsAaOpen(true)}
-                          onClassifyMerchant={handleOpenClassifier}
-                          onEditTransaction={handleOpenEditTransaction}
-                        />
-                      </div>
-                    )}
-
-                    {/* TAB 6: ACCOUNT PROFILE & SECURITY */}
-                    {activeTab === 'profile' && (
-                      <div className="pb-2">
-                        <ProfileTab 
-                          onShowQR={() => setIsQrOpen(true)} 
-                          onLogout={handleLogout}
-                          onClearData={handleClearAllData}
-                          onSeedSampleData={handleSeedSampleData}
-                        />
-                      </div>
-                    )}
-
+                    </div>
                   </div>
 
-                  {/* ======================================================== */}
-                  {/* 4. FIXED BOTTOM NAVIGATION BAR */}
-                  {/* ======================================================== */}
-                  <div className="shrink-0 bg-transparent z-20">
-                    <BottomNav
-                      activeTab={activeTab}
-                      onChangeTab={(t) => setActiveTab(t)}
-                    />
-                  </div>
-
-                  {/* ======================================================== */}
-                  {/* 5. ANDROID SYSTEM NAVIGATION (3-BUTTON OR GESTURE PILL) */}
-                  {/* ======================================================== */}
-                  <div className="w-full py-1.5 px-6 flex items-center justify-center shrink-0 bg-white/95 border-t border-slate-100 z-20">
-                    {navStyle === 'buttons' ? (
-                      /* Android 3-Button Navigation (Back, Home, Overview) */
-                      <div className="w-full flex items-center justify-around text-slate-600">
-                        {/* Back Button (◁) */}
-                        <button
-                          type="button"
-                          onClick={handleAndroidBack}
-                          title="Android Back Button"
-                          className="p-1 hover:text-slate-900 active:scale-90 transition cursor-pointer"
-                        >
-                          <Undo2 className="w-4 h-4 stroke-[2.2]" />
-                        </button>
-
-                        {/* Home Button (○) */}
-                        <button
-                          type="button"
-                          onClick={handleAndroidHome}
-                          title="Android Home Button"
-                          className="p-1 hover:text-slate-900 active:scale-90 transition cursor-pointer"
-                        >
-                          <Circle className="w-4 h-4 stroke-[2.4]" />
-                        </button>
-
-                        {/* Overview / Recents Button (▢) -> Opens Drawer */}
-                        <button
-                          type="button"
-                          onClick={handleAndroidRecents}
-                          title="Android Recents / Menu Drawer Button"
-                          className="p-1 hover:text-slate-900 active:scale-90 transition cursor-pointer"
-                        >
-                          <Square className="w-3.5 h-3.5 stroke-[2.4]" />
-                        </button>
-                      </div>
-                    ) : (
-                      /* Android Gesture Navigation Pill */
-                      <div 
-                        onClick={handleAndroidHome}
-                        title="Android Gesture Bar (Tap for Home)"
-                        className="w-32 h-1 bg-slate-800 rounded-full cursor-pointer hover:bg-slate-950 transition"
-                      />
-                    )}
-                  </div>
-
-                  {/* ======================================================== */}
-                  {/* 6. ANDROID NAVIGATION DRAWER (DROPDOWN MENU) */}
-                  {/* ======================================================== */}
-                  <AndroidDrawer
-                    isOpen={isDrawerOpen}
-                    onClose={() => setIsDrawerOpen(false)}
-                    activeTab={activeTab}
-                    onSelectTab={(t) => setActiveTab(t)}
-                    onOpenScanPay={() => setIsScanOpen(true)}
-                    onOpenSendMoney={() => setIsSendOpen(true)}
-                    onOpenUploadStatement={() => setIsUploadOpen(true)}
-                    onOpenAccountAggregator={() => setIsAaOpen(true)}
-                    onOpenAccountSwitcher={() => setIsSwitcherOpen(true)}
-                    onOpenMyQr={() => setIsQrOpen(true)}
-                    onRefreshData={loadFromDb}
-                    onLogout={handleLogout}
-                    onSeedSampleData={handleSeedSampleData}
-                    balance={balance}
+                </div>
+              ) : activeTab === 'expense' ? (
+                <div className="max-w-6xl mx-auto pb-8">
+                  <ExpenseTrackerTab 
+                    transactions={transactions} 
+                    rawTransactions={extractedRawTxs} 
+                    onNavigateToAdvisor={() => setActiveTab('insights')}
+                    onClassifyMerchant={handleOpenClassifier}
+                    onEditTransaction={handleOpenEditTransaction}
                   />
-
-                </>
+                </div>
+              ) : activeTab === 'insights' ? (
+                <div className="max-w-6xl mx-auto pb-8">
+                  <InsightsTab transactions={transactions} />
+                </div>
+              ) : activeTab === 'history' ? (
+                <div className="max-w-6xl mx-auto pb-8">
+                  <HistoryTab
+                    transactions={transactions}
+                    onOpenUpload={() => setIsUploadOpen(true)}
+                    onOpenAccountAggregator={() => setIsAaOpen(true)}
+                    onClassifyMerchant={handleOpenClassifier}
+                    onEditTransaction={handleOpenEditTransaction}
+                  />
+                </div>
+              ) : activeTab === 'payments' ? (
+                <div className="max-w-6xl mx-auto pb-8">
+                  <PaymentsTab
+                    onScanClick={handleScanPay}
+                    onSendClick={handleSendMoney}
+                  />
+                </div>
+              ) : (
+                <div className="max-w-4xl mx-auto pb-8">
+                  <ProfileTab 
+                    onShowQR={() => setIsQrOpen(true)} 
+                    onLogout={handleLogout}
+                    onClearData={handleClearAllData}
+                    onSeedSampleData={handleSeedSampleData}
+                  />
+                </div>
               )}
-
-            </div>
+            </main>
           </div>
 
         </div>
+      ) : (
+        /* ======================================================== */
+        /* MODE 2: SMARTPHONE PREVIEW FRAME */
+        /* ======================================================== */
+        <div className="min-h-screen bg-[#18191C] text-slate-100 flex flex-col font-sans select-none overflow-x-hidden">
+          
+          {/* Top Frame Workspace Header */}
+          <header className="w-full bg-[#181A1F] border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between text-xs text-slate-300 shrink-0 z-40 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
+                <HappyPocketLogo size={28} />
+                <span className="font-extrabold text-white text-xs tracking-tight">Happy Pocket</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  Phone Preview
+                </span>
+              </div>
+            </div>
 
-      </main>
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              {/* Switch back to Web Portal */}
+              <button
+                type="button"
+                onClick={() => setViewMode('web')}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition cursor-pointer shadow-xs"
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                <span>Open Web Portal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSeedSampleData}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3 text-emerald-400" />
+                <span>Sample Data</span>
+              </button>
+            </div>
+          </header>
+
+          {/* Centered Phone Canvas */}
+          <main className="flex-1 w-full bg-[radial-gradient(#26282E_1px,transparent_1px)] [background-size:20px_20px] flex items-center justify-center p-2 sm:p-6 overflow-y-auto relative">
+            <div className="relative flex items-center justify-center max-w-full">
+              <div className="relative w-[380px] sm:w-[412px] h-[840px] max-h-[92vh] bg-[#1A1C20] rounded-[48px] p-[9px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.08)] flex flex-col justify-between transition-all duration-300">
+                <div className="w-16 h-1 bg-[#0D0E10] rounded-full mx-auto mb-1 shrink-0 shadow-inner" />
+
+                <div className="w-full flex-1 bg-[#EEF2F6] text-slate-900 rounded-[44px] overflow-hidden flex flex-col relative shadow-inner">
+                  {!isLoggedIn ? (
+                    <div className="w-full h-full flex flex-col overflow-y-auto scrollbar-none">
+                      <div className="flex-1">
+                        <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" initialRole={currentUserRole} />
+                      </div>
+                    </div>
+                  ) : currentUserRole === 'medical' || currentUserRole === 'college' ? (
+                    <div className="w-full h-full flex flex-col overflow-hidden bg-slate-50">
+                      <div className="flex-1 overflow-hidden">
+                        <MerchantDashboard 
+                          merchantType={currentUserRole} 
+                          onSwitchAccount={() => setIsSwitcherOpen(true)} 
+                          onLogout={handleLogout} 
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Mobile App Header */}
+                      <div className="px-4 pt-3 pb-2 flex items-center justify-between shrink-0 bg-transparent z-20">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsDrawerOpen(true)}
+                            className="flex items-center gap-1.5 p-2 px-2.5 rounded-2xl bg-white shadow-xs border border-slate-200/90 hover:bg-slate-50 text-slate-800 cursor-pointer"
+                          >
+                            <Menu className="w-4 h-4 text-orange-500" />
+                            <span className="text-[11px] font-extrabold text-slate-700">Menu</span>
+                          </button>
+                          <HappyPocketLogo size={36} />
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setIsQrOpen(true)}
+                            className="p-2 rounded-2xl bg-white shadow-xs border border-slate-200/90 text-slate-700 hover:text-orange-500 cursor-pointer"
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
+                          <div 
+                            onClick={() => setIsSwitcherOpen(true)}
+                            className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-xs cursor-pointer bg-amber-100 flex items-center justify-center shrink-0"
+                          >
+                            <img src="/avatar.jpg" alt="Kotresh C" className="w-full h-full object-cover" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mobile Scrollable Viewport */}
+                      <div className="flex-1 overflow-y-auto scrollbar-none px-4 py-1.5 space-y-3.5 relative">
+                        {activeTab === 'home' && (
+                          <>
+                            <AccountCard
+                              bankName={primaryAccount?.bankName || 'HDFC Bank'}
+                              accountName="Savings Account"
+                              accountNumberMask={primaryAccount?.maskedAccountNumber || '•••• 7482'}
+                              upiId={primaryAccount?.upiId || 'poornatejas@okhdfcbank'}
+                              balance={balance}
+                              onRefresh={loadFromDb}
+                            />
+                            <ActionButtons
+                              onScanPayClick={handleScanPay}
+                              onSendMoneyClick={handleSendMoney}
+                              onTransactionsClick={handleTransactionsClick}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setIsAaOpen(true)}
+                              className="w-full py-2 px-3.5 rounded-2xl bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/20 text-white flex items-center justify-between transition cursor-pointer group shadow-xs"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-5 h-5 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <Landmark className="w-3 h-3" />
+                                </div>
+                                <span className="text-[11px] font-bold text-emerald-200">
+                                  RBI Account Aggregator • Live Bank Consent
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-emerald-400">Connect →</span>
+                            </button>
+                            <RecentTransactions
+                              transactions={transactions.slice(0, 5)}
+                              onTransactionClick={handleOpenEditTransaction}
+                              onViewAll={() => setActiveTab('history')}
+                            />
+                          </>
+                        )}
+                        {activeTab === 'expense' && (
+                          <div className="pb-2">
+                            <ExpenseTrackerTab 
+                              transactions={transactions} 
+                              rawTransactions={extractedRawTxs} 
+                              onNavigateToAdvisor={() => setActiveTab('insights')}
+                              onClassifyMerchant={handleOpenClassifier}
+                              onEditTransaction={handleOpenEditTransaction}
+                            />
+                          </div>
+                        )}
+                        {activeTab === 'insights' && (
+                          <div className="pb-2">
+                            <InsightsTab transactions={transactions} />
+                          </div>
+                        )}
+                        {activeTab === 'history' && (
+                          <div className="pb-2">
+                            <HistoryTab
+                              transactions={transactions}
+                              onOpenUpload={() => setIsUploadOpen(true)}
+                              onOpenAccountAggregator={() => setIsAaOpen(true)}
+                              onClassifyMerchant={handleOpenClassifier}
+                              onEditTransaction={handleOpenEditTransaction}
+                            />
+                          </div>
+                        )}
+                        {activeTab === 'payments' && (
+                          <div className="pb-2">
+                            <PaymentsTab
+                              onScanClick={handleScanPay}
+                              onSendClick={handleSendMoney}
+                            />
+                          </div>
+                        )}
+                        {activeTab === 'profile' && (
+                          <div className="pb-2">
+                            <ProfileTab 
+                              onShowQR={() => setIsQrOpen(true)} 
+                              onLogout={handleLogout}
+                              onClearData={handleClearAllData}
+                              onSeedSampleData={handleSeedSampleData}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Mobile Bottom Navigation */}
+                      <div className="shrink-0 bg-transparent z-20">
+                        <BottomNav
+                          activeTab={activeTab}
+                          onChangeTab={(t) => setActiveTab(t)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* 3. INTERACTIVE MODALS (SCAN & PAY, SEND, STATEMENT, QR) */}
