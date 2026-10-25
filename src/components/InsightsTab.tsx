@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import RecommenderCard from '@/components/RecommenderCard';
 
 export default function InsightsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'unnecessary' | 'alternatives'>('unnecessary');
@@ -205,6 +206,12 @@ export default function InsightsTab() {
       {/* ========================================================= */}
       {activeSubTab === 'alternatives' && (
         <div className="space-y-3.5 animate-fadeIn">
+          {/* Live AMFI & IRDAI Recommender Simulator */}
+          <RecommenderCard 
+            initialLeakage={967} 
+            onExploreSIP={(name) => showToast(`Selected SIP plan: ${name}`)} 
+          />
+
           {/* Main Container Card */}
           <div className="bg-white rounded-[28px] p-5 shadow-[0_4px_24px_rgba(15,23,42,0.05)] border border-slate-100 space-y-4">
             

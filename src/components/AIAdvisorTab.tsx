@@ -11,6 +11,8 @@ import {
   ArrowRight
 } from 'lucide-react';
 
+import RecommenderCard from '@/components/RecommenderCard';
+
 interface AIAdvisorTabProps {
   trueLivingExpenses: number;
   monthlyCommitments: number;
@@ -28,6 +30,7 @@ export default function AIAdvisorTab({
   onExploreSubscriptions,
   onExploreTax,
 }: AIAdvisorTabProps) {
+  const [showRecommender, setShowRecommender] = useState<boolean>(true);
   const [messages, setMessages] = useState<Array<{ sender: 'ai' | 'user'; text: string; time: string }>>([
     {
       sender: 'ai',
@@ -38,10 +41,10 @@ export default function AIAdvisorTab({
   const [inputVal, setInputVal] = useState('');
 
   const quickPrompts = [
+    'Turn my leaks into SIP & Insurance',
     'Where is my money leaking this month?',
     'Show my zombie recurring subscriptions',
     'How much can I claim in tax deductions?',
-    'What if I cut food delivery by 20%?',
   ];
 
   const handleSend = (text: string) => {
@@ -56,7 +59,10 @@ export default function AIAdvisorTab({
     let reply = '';
     const q = text.toLowerCase();
 
-    if (q.includes('leak') || q.includes('spending') || q.includes('food')) {
+    if (q.includes('sip') || q.includes('insurance') || q.includes('reclaim')) {
+      setShowRecommender(true);
+      reply = `I converted your leaks into live recommendations: Routing 65% into UTI Nifty 50 & Parag Parikh Flexi Cap and 35% into ₹1 Cr Term Life + ₹15L Health cover. This creates ₹1.45L+ wealth in 5 years and saves ₹3,360/yr in taxes! See the interactive card below.`;
+    } else if (q.includes('leak') || q.includes('spending') || q.includes('food')) {
       reply = `You spent ₹4,200 on dining & food delivery (Swiggy/Zomato) and ₹${monthlyCommitments.toLocaleString('en-IN')} on digital subscriptions (Netflix, Google Play AutoPay). Cutting food delivery frequency twice a week will save ₹1,400/month (₹16,800/year)!`;
     } else if (q.includes('sub') || q.includes('netflix') || q.includes('zombie')) {
       reply = `I found 2 active AutoPay mandates: Netflix India (₹649/mo) and Spotify (₹119/mo). If you pause the unused entertainment tier, you instantly retain ₹9,216 annually in disposable income.`;
@@ -79,7 +85,7 @@ export default function AIAdvisorTab({
   return (
     <div className="space-y-4 animate-fadeIn pb-4">
       {/* Header card */}
-      <div className="p-4 sm:p-5 rounded-[26px] bg-gradient-to-br from-slate-900 to-[#0A172E] text-white shadow-md relative overflow-hidden">
+      <div className="p-4 sm:p-5 rounded-[26px] bg-gradient-to-br from-slate-900 to-[#0A172E] text-white shadow-md relative overflow-hidden flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-2xl bg-orange-500/20 border border-orange-500/30 text-orange-400">
             <Bot className="w-5 h-5 stroke-[2.2]" />
@@ -93,7 +99,22 @@ export default function AIAdvisorTab({
             </p>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowRecommender(!showRecommender)}
+          className="text-[10px] font-bold px-3 py-1.5 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/30 transition cursor-pointer shrink-0"
+        >
+          {showRecommender ? 'Hide Simulator' : 'Show Simulator'}
+        </button>
       </div>
+
+      {/* Embedded Live Recommender Card */}
+      {showRecommender && (
+        <RecommenderCard
+          initialLeakage={monthlyCommitments > 0 ? monthlyCommitments + 1500 : 2500}
+        />
+      )}
 
       {/* Suggested Quick Prompts */}
       <div className="space-y-1.5">
