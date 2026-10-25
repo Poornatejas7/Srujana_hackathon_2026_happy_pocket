@@ -44,6 +44,8 @@ import ProfileTab from '@/components/ProfileTab';
 import ExpenseTrackerTab from '@/components/ExpenseTrackerTab';
 import InsightsTab from '@/components/InsightsTab';
 import AuthScreen from '@/components/AuthScreen';
+import MerchantDashboard from '@/components/MerchantDashboard';
+import AccountSwitcherModal, { UserRole } from '@/components/AccountSwitcherModal';
 import StatementUploadModal from '@/components/StatementUploadModal';
 import MyQrModal from '@/components/MyQrModal';
 import AndroidDrawer from '@/components/AndroidDrawer';
@@ -71,6 +73,8 @@ export default function HappyPocketApp() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isAaOpen, setIsAaOpen] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('personal');
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [classifierModalState, setClassifierModalState] = useState<{
     isOpen: boolean;
     merchantName: string;
@@ -136,12 +140,16 @@ export default function HappyPocketApp() {
     }, 600);
   };
 
-  // Check login state on mount
+  // Check login state and user role on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('hp_logged_in');
       if (stored === 'false') {
         setIsLoggedIn(false);
+      }
+      const savedRole = localStorage.getItem('hp_user_role') as UserRole;
+      if (savedRole && (savedRole === 'personal' || savedRole === 'medical' || savedRole === 'college')) {
+        setCurrentUserRole(savedRole);
       }
     }
   }, []);
@@ -269,12 +277,20 @@ export default function HappyPocketApp() {
     loadFromDb();
   }, []);
 
-  const handleLoginSuccess = (name?: string) => {
+  const handleLoginSuccess = (name?: string, role: UserRole = 'personal') => {
     setIsLoggedIn(true);
+    setCurrentUserRole(role);
     if (typeof window !== 'undefined') {
       localStorage.setItem('hp_logged_in', 'true');
+      localStorage.setItem('hp_user_role', role);
     }
-    showToast(`Welcome back, ${name || 'User'}!`);
+    loadFromDb();
+    const roleLabels: Record<UserRole, string> = {
+      personal: 'Kotresh C (Personal Banking)',
+      medical: 'City Care Medicals (Merchant Portal)',
+      college: 'St. Xavier College (Merchant Portal)',
+    };
+    showToast(`Logged in as ${roleLabels[role]}!`);
   };
 
   const handleLogout = () => {
@@ -283,6 +299,19 @@ export default function HappyPocketApp() {
       localStorage.setItem('hp_logged_in', 'false');
     }
     showToast('Logged out successfully');
+  };
+
+  const handleSwitchRole = (role: UserRole) => {
+    setCurrentUserRole(role);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hp_user_role', role);
+    }
+    const roleLabels: Record<UserRole, string> = {
+      personal: 'Personal Account',
+      medical: 'City Care Medicals & Pharmacy',
+      college: 'St. Xavier Engineering College',
+    };
+    showToast(`Switched to ${roleLabels[role]}`);
   };
 
   // Payment Success Handler
@@ -753,7 +782,44 @@ export default function HappyPocketApp() {
                     </div>
                   </div>
                   <div className="flex-1">
-                    <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" />
+                    <AuthScreen onLoginSuccess={handleLoginSuccess} initialMode="login" initialRole={currentUserRole} />
+                  </div>
+                </div>
+              ) : currentUserRole === 'medical' || currentUserRole === 'college' ? (
+                /* ======================================================== */
+                /* MERCHANT PORTAL: MEDICAL SHOP OR EDUCATION COLLEGE */
+                /* "which should show only thr qr code and the recived money total money" */
+                /* ======================================================== */
+                <div className="w-full h-full flex flex-col overflow-hidden bg-slate-50">
+                  {/* Android Status Bar */}
+                  <div className="w-full pt-2.5 pb-1 px-6 flex items-center justify-between text-slate-800 select-none shrink-0 bg-white z-20">
+                    <span className="font-bold text-xs tracking-tight font-sans">{currentTime}</span>
+                    <div className="w-3.5 h-3.5 rounded-full bg-black ring-1 ring-slate-800 shadow-inner" />
+                    <div className="flex items-center gap-1.5 text-slate-800">
+                      <span className="text-[10px] font-extrabold tracking-wider">5G</span>
+                      <Wifi className="w-3 h-3 stroke-[2.4]" />
+                      <div className="w-4 h-2 rounded-[3px] border-[1.2px] border-slate-800 p-0.5 flex items-center">
+                        <div className="w-[90%] h-full bg-slate-800 rounded-[1px]" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Merchant View Showing Only QR Code & Total Received Money */}
+                  <div className="flex-1 overflow-hidden">
+                    <MerchantDashboard 
+                      merchantType={currentUserRole} 
+                      onSwitchAccount={() => setIsSwitcherOpen(true)} 
+                      onLogout={handleLogout} 
+                    />
+                  </div>
+
+                  {/* Android Bottom Navigation Gesture Bar (Tap to Switch Account) */}
+                  <div className="w-full py-1.5 px-6 flex items-center justify-center shrink-0 bg-white border-t border-slate-100 z-20">
+                    <div 
+                      onClick={() => setIsSwitcherOpen(true)}
+                      title="Tap to Switch Account"
+                      className="w-32 h-1 bg-slate-800 rounded-full cursor-pointer hover:bg-slate-950 transition"
+                    />
                   </div>
                 </div>
               ) : (
@@ -835,8 +901,8 @@ export default function HappyPocketApp() {
                       </button>
 
                       <div 
-                        onClick={() => setActiveTab('profile')}
-                        title="My Profile"
+                        onClick={() => setIsSwitcherOpen(true)}
+                        title="Switch Bank Account (Personal, Medical Shop, College)"
                         className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-xs cursor-pointer hover:ring-2 hover:ring-orange-400 transition bg-amber-100 flex items-center justify-center shrink-0"
                       >
                         <img
@@ -1046,6 +1112,7 @@ export default function HappyPocketApp() {
                     onOpenSendMoney={() => setIsSendOpen(true)}
                     onOpenUploadStatement={() => setIsUploadOpen(true)}
                     onOpenAccountAggregator={() => setIsAaOpen(true)}
+                    onOpenAccountSwitcher={() => setIsSwitcherOpen(true)}
                     onOpenMyQr={() => setIsQrOpen(true)}
                     onRefreshData={loadFromDb}
                     onLogout={handleLogout}
@@ -1197,6 +1264,15 @@ export default function HappyPocketApp() {
         merchantName={classifierModalState.merchantName}
         currentCategory={classifierModalState.currentCategory}
         onSaveCategory={handleSaveCategoryOverride}
+      />
+
+      <AccountSwitcherModal
+        isOpen={isSwitcherOpen}
+        onClose={() => setIsSwitcherOpen(false)}
+        currentRole={currentUserRole}
+        onSelectRole={handleSwitchRole}
+        onLogout={handleLogout}
+        personalBalance={balance}
       />
 
     </div>

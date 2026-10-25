@@ -217,6 +217,34 @@ export default function SendMoneyModal({
                 }}
                 className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#F97316] font-mono transition"
               />
+
+              {/* Quick Beneficiary Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCustomRecipient('City Care Medicals & Pharmacy')}
+                  className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold hover:bg-emerald-100 transition shrink-0 cursor-pointer flex items-center gap-1"
+                >
+                  <span>💊</span>
+                  <span>City Care Medicals</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomRecipient("St. Xavier Engineering College")}
+                  className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-[11px] font-bold hover:bg-indigo-100 transition shrink-0 cursor-pointer flex items-center gap-1"
+                >
+                  <span>🎓</span>
+                  <span>St. Xavier College</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomRecipient('Harsha Vardhan')}
+                  className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold hover:bg-slate-200 transition shrink-0 cursor-pointer flex items-center gap-1"
+                >
+                  <span>🤝</span>
+                  <span>Harsha (P2P)</span>
+                </button>
+              </div>
             </div>
 
             {/* Beneficiary Preview */}

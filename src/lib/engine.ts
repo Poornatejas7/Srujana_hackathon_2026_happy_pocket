@@ -105,6 +105,8 @@ export const PRESET_MERCHANT_ACCOUNTS: SimulatedAccount[] = [
   { id: 'm_spotify', name: 'Spotify India', vpa: 'spotify@icici', theme: 'Music & Audio Streaming', themeIcon: '🎵', category: 'Subscriptions & Digital', defaultAmount: 119, accountType: 'Merchant / Business' },
   { id: 'm_iocl', name: 'Indian Oil Fuel Station', vpa: 'iocl.fuels@sbi', theme: 'Fuel & Petroleum', themeIcon: '⛽', category: 'Transport & Fuel', defaultAmount: 500, accountType: 'Merchant / Business' },
   { id: 'm_apollo', name: 'Apollo Pharmacy', vpa: 'apollo.meds@icici', theme: 'Medicines & Healthcare', themeIcon: '💊', category: 'Healthcare', defaultAmount: 380, accountType: 'Merchant / Business' },
+  { id: 'm_citycare_medicals', name: 'City Care Medicals & Pharmacy', vpa: 'citycaremedicals@okhdfcbank', theme: 'Medical Shop & Pharmaceuticals', themeIcon: '💊', category: 'Healthcare', defaultAmount: 420, accountType: 'Merchant / Business' },
+  { id: 'm_xavier_college', name: 'St. Xavier Engineering College', vpa: 'xaviercollege@sbi', theme: 'Education College & Tuition Fees', themeIcon: '🎓', category: 'Subscriptions & Digital', defaultAmount: 3500, accountType: 'Merchant / Business' },
   { id: 'm_zara', name: 'Zara Fashion Store', vpa: 'zara.retail@hdfc', theme: 'Clothing & Fashion Apparel', themeIcon: '👗', category: 'Shopping & Discretionary', defaultAmount: 2490, accountType: 'Merchant / Business' },
   { id: 'm_bescom', name: 'BESCOM Electricity Utility', vpa: 'bescom.power@billdesk', theme: 'Electricity & Utility Bills', themeIcon: '⚡', category: 'Housing & Utilities', defaultAmount: 1420, accountType: 'Merchant / Business' },
 ];

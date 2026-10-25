@@ -137,6 +137,35 @@ export async function POST(req: NextRequest) {
       userOverridden: !!overrideCategory,
     });
 
+    // 8. Record Payee CREDIT in Transaction Ledger (for Merchant received money dashboard)
+    if (payeeAccount) {
+      await TransactionModel.create({
+        accountId: payeeAccount.accountNumber,
+        timestamp: new Date(),
+        rawDescription: `UPI/P2M/${payerAccount.accountHolderName.toUpperCase()}/${rrn}/${payeeAccount.bankName.slice(0, 4)}`,
+        amount: numAmount,
+        currency: 'INR',
+        txMode: 'UPI',
+        upiRrn: rrn,
+        payeeName: payerAccount.accountHolderName,
+        cleanMerchant: payerAccount.accountHolderName,
+        bankCode: payerAccount.bankName,
+        vpaHandle: payerAccount.upiId,
+        remark: note || `Payment received from ${payerAccount.accountHolderName}`,
+        accountType: 'Personal',
+        direction: 'CREDIT',
+        theme: 'Customer Payment Received',
+        themeIcon: '💰',
+        category: 'Income',
+        tier: 'Income',
+        isRecurring: false,
+        isInternalTransfer: false,
+        isRefundOrReversal: false,
+        confidenceScore: 100,
+        userOverridden: false,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       message: 'UPI Payment processed successfully',

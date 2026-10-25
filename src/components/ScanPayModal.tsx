@@ -351,6 +351,34 @@ export default function ScanPayModal({
                     </button>
                   )}
                 </div>
+
+                {/* Quick Merchant Chips */}
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleCustomInputChange('City Care Medicals & Pharmacy')}
+                    className="px-2.5 py-1 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[11px] font-bold hover:bg-emerald-900 transition shrink-0 cursor-pointer flex items-center gap-1"
+                  >
+                    <span>💊</span>
+                    <span>City Care Medicals</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCustomInputChange("St. Xavier Engineering College")}
+                    className="px-2.5 py-1 rounded-xl bg-indigo-950 text-indigo-300 border border-indigo-700/60 text-[11px] font-bold hover:bg-indigo-900 transition shrink-0 cursor-pointer flex items-center gap-1"
+                  >
+                    <span>🎓</span>
+                    <span>St. Xavier College</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCustomInputChange('Amazon India Marketplace')}
+                    className="px-2.5 py-1 rounded-xl bg-slate-900 text-slate-300 border border-slate-700 text-[11px] font-bold hover:bg-slate-800 transition shrink-0 cursor-pointer flex items-center gap-1"
+                  >
+                    <span>📦</span>
+                    <span>Amazon</span>
+                  </button>
+                </div>
               </div>
 
               {/* Clean Empty State awaiting user entry if no merchant is entered */}

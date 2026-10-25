@@ -118,6 +118,42 @@ export const INITIAL_BANK_ACCOUNTS = [
     theme: 'Peer-to-Peer Split & Transfer',
     themeIcon: '🤝',
   },
+  // 8. Merchant 6: Medical Shop (City Care Medicals & Pharmacy)
+  {
+    accountNumber: '50100492819283',
+    maskedAccountNumber: '•••• 9283',
+    ifsc: 'HDFC0000492',
+    bankName: 'HDFC Bank',
+    accountHolderName: 'City Care Medicals & Pharmacy',
+    upiId: 'citycaremedicals@okhdfcbank',
+    accountType: 'MERCHANT' as const,
+    balance: 0.00,
+    currency: 'INR',
+    upiPin: '1234',
+    isPrimaryUser: false,
+    merchantCategory: 'Healthcare',
+    mcc: '5912',
+    theme: 'Medical Shop & Pharmaceuticals',
+    themeIcon: '💊',
+  },
+  // 9. Merchant 7: Education College (St. Xavier Engineering College)
+  {
+    accountNumber: '301948271928',
+    maskedAccountNumber: '•••• 1928',
+    ifsc: 'SBIN0002819',
+    bankName: 'State Bank of India',
+    accountHolderName: 'St. Xavier Engineering College',
+    upiId: 'xaviercollege@sbi',
+    accountType: 'MERCHANT' as const,
+    balance: 0.00,
+    currency: 'INR',
+    upiPin: '1234',
+    isPrimaryUser: false,
+    merchantCategory: 'Education & Learning',
+    mcc: '8220',
+    theme: 'Education College & Tuition Fees',
+    themeIcon: '🎓',
+  },
 ];
 
 // Ensure initial accounts exist in database

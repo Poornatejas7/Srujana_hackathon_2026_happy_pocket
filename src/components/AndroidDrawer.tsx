@@ -19,7 +19,8 @@ import {
   ChevronRight,
   TrendingUp,
   Receipt,
-  Landmark
+  Landmark,
+  Users
 } from 'lucide-react';
 import { NavTab } from './BottomNav';
 
@@ -32,6 +33,7 @@ interface AndroidDrawerProps {
   onOpenSendMoney: () => void;
   onOpenUploadStatement: () => void;
   onOpenAccountAggregator?: () => void;
+  onOpenAccountSwitcher?: () => void;
   onOpenMyQr: () => void;
   onRefreshData: () => void;
   onLogout: () => void;
@@ -63,6 +65,7 @@ export default function AndroidDrawer({
   onOpenSendMoney,
   onOpenUploadStatement,
   onOpenAccountAggregator,
+  onOpenAccountSwitcher,
   onOpenMyQr,
   onRefreshData,
   onLogout,
@@ -203,6 +206,18 @@ export default function AndroidDrawer({
     {
       title: 'ACCOUNT & SYSTEM',
       items: [
+        {
+          id: 'switch_account',
+          label: 'Switch Bank Account',
+          subtext: 'Personal, Medical Shop & College',
+          icon: Users,
+          color: 'text-amber-600 bg-amber-50 border-amber-200',
+          action: () => {
+            onClose();
+            onOpenAccountSwitcher?.();
+          },
+          badge: '3 Accounts',
+        },
         {
           id: 'profile',
           label: 'My Profile & Security',

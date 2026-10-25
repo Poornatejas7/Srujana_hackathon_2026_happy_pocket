@@ -12,27 +12,49 @@ import {
 } from 'lucide-react';
 import HappyPocketLogo from '@/components/HappyPocketLogo';
 
+export type UserRole = 'personal' | 'medical' | 'college';
+
 interface AuthScreenProps {
-  onLoginSuccess: (accountNumber?: string) => void;
+  onLoginSuccess: (accountNumber?: string, role?: UserRole) => void;
   initialMode?: 'login' | 'register';
+  initialRole?: UserRole;
 }
 
 export default function AuthScreen({
   onLoginSuccess,
   initialMode = 'login',
+  initialRole = 'personal',
 }: AuthScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
+  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
   
-  // Form fields (accepts any random values, no backend required)
-  const [accountNumber, setAccountNumber] = useState('5274 8891 0023');
-  const [password, setPassword] = useState('••••••••');
+  // Form fields per role
+  const [accountNumber, setAccountNumber] = useState('5010 0492 8174');
+  const [password, setPassword] = useState('1234');
   const [mobileNumber, setMobileNumber] = useState('98765 43210');
-  const [confirmPassword, setConfirmPassword] = useState('••••••••');
+  const [confirmPassword, setConfirmPassword] = useState('1234');
   
   // Visibility toggles
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleRoleChange = (role: UserRole) => {
+    setSelectedRole(role);
+    if (role === 'personal') {
+      setAccountNumber('5010 0492 8174');
+      setMobileNumber('98765 43210');
+      setPassword('1234');
+    } else if (role === 'medical') {
+      setAccountNumber('5010 0492 8192');
+      setMobileNumber('98765 09283');
+      setPassword('1234');
+    } else if (role === 'college') {
+      setAccountNumber('3019 4827 1928');
+      setMobileNumber('98765 11928');
+      setPassword('1234');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +63,7 @@ export default function AuthScreen({
     // Simulate brief smooth authentication
     setTimeout(() => {
       setIsSubmitting(false);
-      onLoginSuccess(accountNumber || '5274 8891 0023');
+      onLoginSuccess(accountNumber || '5010 0492 8174', selectedRole);
     }, 400);
   };
 
@@ -49,7 +71,7 @@ export default function AuthScreen({
     setIsSubmitting(true);
     setTimeout(() => {
       setIsSubmitting(false);
-      onLoginSuccess('Mobile OTP: ' + mobileNumber);
+      onLoginSuccess('Mobile OTP: ' + mobileNumber, selectedRole);
     }, 400);
   };
 
@@ -88,14 +110,68 @@ export default function AuthScreen({
         {/* ==================================================== */}
         {mode === 'login' ? (
           <div className="w-full max-w-sm space-y-4 animate-fadeIn">
-            {/* Titles */}
-            <div className="text-center mb-5">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center justify-center gap-1.5">
-                <span>Welcome Back</span>
-                <span className="text-xl">👋</span>
+            {/* Account Role Selector (Personal, Medical Shop, Education College) */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/90 rounded-2xl mb-2 shadow-inner">
+              <button
+                type="button"
+                onClick={() => handleRoleChange('personal')}
+                className={`py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                  selectedRole === 'personal'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>👤</span>
+                <span className="truncate">Personal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleRoleChange('medical')}
+                className={`py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                  selectedRole === 'medical'
+                    ? 'bg-white text-emerald-800 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>💊</span>
+                <span className="truncate">Medical</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleRoleChange('college')}
+                className={`py-2 px-1 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                  selectedRole === 'college'
+                    ? 'bg-white text-indigo-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>🎓</span>
+                <span className="truncate">College</span>
+              </button>
+            </div>
+
+            {/* Dynamic Role Titles */}
+            <div className="text-center mb-4">
+              <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center justify-center gap-1.5">
+                <span>
+                  {selectedRole === 'personal'
+                    ? 'Kotresh C'
+                    : selectedRole === 'medical'
+                    ? 'City Care Medicals'
+                    : "St. Xavier College"}
+                </span>
+                <span className="text-lg">
+                  {selectedRole === 'personal' ? '👋' : selectedRole === 'medical' ? '💊' : '🎓'}
+                </span>
               </h2>
-              <p className="text-xs sm:text-[13px] text-slate-500 font-medium mt-1">
-                Login to your Happy Pocket account
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {selectedRole === 'personal'
+                  ? 'Personal Banking & UPI Ledger'
+                  : selectedRole === 'medical'
+                  ? 'Medical Shop Merchant QR & Live Inflow'
+                  : 'College Merchant Portal & Fee QR'}
               </p>
             </div>
 
@@ -120,7 +196,7 @@ export default function AuthScreen({
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
+                  placeholder="Password / UPI PIN"
                   className="w-full bg-transparent text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none"
                   required
                 />
@@ -141,9 +217,21 @@ export default function AuthScreen({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3.5 rounded-2xl bg-[#F97316] hover:bg-[#EA580C] active:scale-[0.98] text-white font-extrabold text-sm sm:text-base shadow-lg shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center"
+                className={`w-full py-3.5 rounded-2xl text-white font-extrabold text-sm sm:text-base shadow-lg transition-all cursor-pointer flex items-center justify-center active:scale-[0.98] ${
+                  selectedRole === 'personal'
+                    ? 'bg-[#F97316] hover:bg-[#EA580C] shadow-orange-500/25'
+                    : selectedRole === 'medical'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25'
+                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25'
+                }`}
               >
-                {isSubmitting ? 'Logging in...' : 'Login'}
+                {isSubmitting 
+                  ? 'Authenticating...' 
+                  : selectedRole === 'personal'
+                  ? 'Login to Personal Banking'
+                  : selectedRole === 'medical'
+                  ? 'Login as Medical Shop'
+                  : 'Login as Education College'}
               </button>
             </form>
 
